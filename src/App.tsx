@@ -6,7 +6,9 @@ import AdminLayout from '@/components/layout/AdminLayout';
 import Dashboard from '@/pages/admin/Dashboard';
 import DocumentList from '@/pages/admin/DocumentList';
 import DocumentCreate from '@/pages/admin/DocumentCreate';
+import DocumentDetail from '@/pages/admin/DocumentDetail';
 import SignerGroups from '@/pages/admin/SignerGroups';
+import UserManagement from '@/pages/admin/UserManagement';
 
 function App() {
   return (
@@ -26,7 +28,9 @@ function App() {
                     <Route path="dashboard" element={<Dashboard />} />
                     <Route path="documents" element={<DocumentList />} />
                     <Route path="documents/create" element={<DocumentCreate />} />
+                    <Route path="documents/:id" element={<DocumentDetail />} />
                     <Route path="documents/batch/:batchId" element={<DocumentList />} />
+                    <Route path="users" element={<UserManagement />} />
                     <Route path="signer-groups" element={<SignerGroups />} />
                     <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
                   </Routes>

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, Users, Search, Edit, Trash2, Eye } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { signerGroupsAPI } from '@/lib/api';
-import type { SignerGroup } from '@/types';
+import { Input, Pagination, PaginationInfo } from '@/components/ui';
 
 export default function SignerGroups() {
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -15,7 +15,7 @@ export default function SignerGroups() {
     const { data: signerGroupsResponse, isLoading, error } = useQuery({
         queryKey: ['signerGroups', currentPage, pageSize, searchTerm],
         queryFn: () => signerGroupsAPI.getSignerGroups({
-            page: currentPage,
+            page: currentPage - 1, // Convert to 0-based for API
             limit: pageSize,
             search: searchTerm || undefined,
         }),
@@ -64,14 +64,16 @@ export default function SignerGroups() {
             {/* Search */}
             <div className="card p-6">
                 <div className="relative max-w-md">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-secondary-400" />
-                    <input
-                        type="text"
+                    <Input
                         placeholder="Search signer groups..."
-                        className="form-input pl-10"
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setCurrentPage(1); // Reset to first page when searching
+                        }}
+                        className="pl-10"
                     />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-secondary-400 pointer-events-none" />
                 </div>
             </div>
 
@@ -134,6 +136,23 @@ export default function SignerGroups() {
                             </button>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+                    <PaginationInfo
+                        currentPage={currentPage}
+                        totalItems={signerGroupsResponse?.total || 0}
+                        itemsPerPage={pageSize}
+                    />
+                    <Pagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={setCurrentPage}
+                        maxVisiblePages={5}
+                    />
                 </div>
             )}
 

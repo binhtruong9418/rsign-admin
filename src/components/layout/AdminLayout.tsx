@@ -23,8 +23,8 @@ interface AdminLayoutProps {
 const navigation = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Documents', href: '/admin/documents', icon: FileText },
+    { name: 'Users', href: '/admin/users', icon: Users },
     { name: 'Signer Groups', href: '/admin/signer-groups', icon: Users },
-    { name: 'Components Demo', href: '/admin/components-demo', icon: Palette },
     { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
