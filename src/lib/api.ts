@@ -18,9 +18,10 @@ import type {
   CheckoutResponse,
   SignDocumentRequest,
 } from "@/types";// Create axios instance with base configuration
+import { JWT_STORAGE_KEY, USER_STORAGE_KEY } from "@/lib/constant";
 
 export const api = axios.create({
-    baseURL: "http://localhost:5531/api", // This will be proxied by Vite to your backend
+    baseURL: "http://api-beta.rsign.io.vn/api", // This will be proxied by Vite to your backend
     timeout: 10000,
     headers: {
         "Content-Type": "application/json",
@@ -30,7 +31,7 @@ export const api = axios.create({
 // Request interceptor to add JWT token
 api.interceptors.request.use(
     (config) => {
-        const token = storage.get<string>("accessToken");
+        const token = storage.get<string>(JWT_STORAGE_KEY);
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -50,8 +51,8 @@ api.interceptors.response.use(
         // Handle authentication errors
         if (error.response?.status === 401) {
             // Clear stored auth data
-            storage.remove("accessToken");
-            storage.remove("user");
+            storage.remove(JWT_STORAGE_KEY);
+            storage.remove(USER_STORAGE_KEY);
 
             // Redirect to login if not already there
             if (window.location.pathname !== "/login") {

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { User, LoginRequest } from '@/types';
 import { storage } from '@/lib/utils';
 import { authAPI } from '@/lib/api';
+import { JWT_STORAGE_KEY, USER_STORAGE_KEY } from '@/lib/constant';
 
 interface AuthContextType {
     user: User | null;
@@ -25,8 +26,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // Initialize auth state from localStorage
     useEffect(() => {
-        const token = storage.get<string>('accessToken');
-        const savedUser = storage.get<User>('user');
+        const token = storage.get<string>(JWT_STORAGE_KEY);
+        const savedUser = storage.get<User>(USER_STORAGE_KEY);
 
         if (token && savedUser) {
             setUser(savedUser);
@@ -40,8 +41,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
             const response = await authAPI.login(credentials);
 
             // Store token and user data
-            storage.set('accessToken', response.token);
-            storage.set('user', response.user);
+            storage.set(JWT_STORAGE_KEY, response.token);
+            storage.set(USER_STORAGE_KEY, response.user);
 
             setUser(response.user);
         } catch (error) {
@@ -49,8 +50,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
             throw new Error('Invalid credentials');
         }
     }; const logout = () => {
-        storage.remove('accessToken');
-        storage.remove('user');
+        storage.remove(JWT_STORAGE_KEY);
+        storage.remove(USER_STORAGE_KEY);
         setUser(null);
     };
 
