@@ -173,10 +173,20 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
 
         const minSize = 30;
         if (currentDrawing.width >= minSize && currentDrawing.height >= minSize) {
-            // Get PDF canvas size to normalize coordinates
+            // Get PDF page dimensions (actual PDF dimensions at scale 1.0)
+            const pageSize = pageDimensions.get(currentPage);
+            if (!pageSize) {
+                toast.error('PDF page dimensions not loaded. Please wait for the page to fully load.');
+                setIsDrawing(false);
+                setDrawingStart(null);
+                setCurrentDrawing(null);
+                setDragMode(false);
+                return;
+            }
+
+            // Get canvas element to get the current display size
             const pdfContainer = pdfViewerRef.current;
             const canvas = pdfContainer?.querySelector('canvas');
-
             if (!canvas) {
                 toast.error('PDF canvas not found');
                 setIsDrawing(false);
@@ -190,17 +200,22 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
             const canvasWidth = canvas.offsetWidth;
             const canvasHeight = canvas.offsetHeight;
 
-            // Create new zone with normalized coordinates (0-1 range)
-            // This ensures zones maintain their position when zooming
+            // Convert drawing coordinates from canvas pixels to PDF page percentages
+            // Step 1: Get position in canvas pixels (currentDrawing.x, currentDrawing.y)
+            // Step 2: Convert to percentage of canvas (currentDrawing.x / canvasWidth)
+            // Step 3: This percentage is the same as percentage of PDF page
+            // Step 4: Multiply by 100 to store as 0-100 range
+            // Because the canvas displays the PDF page proportionally
             const newZone: SignatureZone = {
                 id: `zone-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 signerId: selectedSignerId,
                 page: currentPage,
-                // Store as percentage of canvas size (normalized 0-1)
-                x: currentDrawing.x / canvasWidth,
-                y: currentDrawing.y / canvasHeight,
-                width: currentDrawing.width / canvasWidth,
-                height: currentDrawing.height / canvasHeight,
+                // Store as percentage of PDF page dimensions (0-100 range)
+                // The canvas displays the PDF proportionally, so canvas percentage = PDF percentage
+                x: (currentDrawing.x / canvasWidth) * 100,
+                y: (currentDrawing.y / canvasHeight) * 100,
+                width: (currentDrawing.width / canvasWidth) * 100,
+                height: (currentDrawing.height / canvasHeight) * 100,
                 label: undefined
             };
 
@@ -215,7 +230,7 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
         setDrawingStart(null);
         setCurrentDrawing(null);
         setDragMode(false);
-    }, [isDrawing, drawingStart, currentDrawing, selectedSignerId, currentPage, documentData.signatureZones, updateDocumentData]);
+    }, [isDrawing, drawingStart, currentDrawing, selectedSignerId, currentPage, pageDimensions, documentData.signatureZones, updateDocumentData]);
 
     const updateZone = (zoneId: string, updates: Partial<SignatureZone>) => {
         const updatedZones = documentData.signatureZones.map(zone =>
@@ -265,9 +280,10 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
         const canvasWidth = canvas.offsetWidth;
         const canvasHeight = canvas.offsetHeight;
 
-        // Convert pixel sizes to normalized (0-1)
-        const normalizedWidth = width / canvasWidth;
-        const normalizedHeight = height / canvasHeight;
+        // Convert pixel sizes to percentage (0-100)
+        // Canvas percentage = PDF page percentage (canvas displays PDF proportionally)
+        const normalizedWidth = (width / canvasWidth) * 100;
+        const normalizedHeight = (height / canvasHeight) * 100;
 
         const updatedZones = documentData.signatureZones.map(zone =>
             selectedZones.includes(zone.id)
@@ -624,7 +640,7 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
                                     const signer = getSignerById(zone.signerId);
                                     if (!signer) return null;
 
-                                    // Get canvas element to calculate actual pixel positions
+                                    // Get canvas element to calculate display positions
                                     const pdfContainer = pdfViewerRef.current;
                                     const canvas = pdfContainer?.querySelector('canvas');
                                     if (!canvas) return null;
@@ -632,11 +648,14 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
                                     const canvasWidth = canvas.offsetWidth;
                                     const canvasHeight = canvas.offsetHeight;
 
-                                    // Convert normalized coordinates (0-1) to canvas pixels
-                                    const pixelX = zone.x * canvasWidth;
-                                    const pixelY = zone.y * canvasHeight;
-                                    const pixelWidth = zone.width * canvasWidth;
-                                    const pixelHeight = zone.height * canvasHeight;
+                                    // Convert PDF page percentages (0-100) to canvas pixels for display
+                                    // Zone coordinates are stored as percentages of PDF page dimensions (0-100)
+                                    // Canvas displays PDF proportionally, so we can use canvas size directly
+                                    // Divide by 100 to convert to 0-1 range, then multiply by canvas size
+                                    const pixelX = (zone.x / 100) * canvasWidth;
+                                    const pixelY = (zone.y / 100) * canvasHeight;
+                                    const pixelWidth = (zone.width / 100) * canvasWidth;
+                                    const pixelHeight = (zone.height / 100) * canvasHeight;
 
                                     return (
                                         <div
@@ -664,9 +683,10 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
                                                     const newX = Math.max(0, Math.min(startLeft + deltaX, canvasWidth - pixelWidth));
                                                     const newY = Math.max(0, Math.min(startTop + deltaY, canvasHeight - pixelHeight));
 
+                                                    // Convert canvas pixels back to PDF page percentages (0-100)
                                                     updateZone(zone.id, {
-                                                        x: newX / canvasWidth,
-                                                        y: newY / canvasHeight,
+                                                        x: (newX / canvasWidth) * 100,
+                                                        y: (newY / canvasHeight) * 100,
                                                     });
                                                 };
 
@@ -756,9 +776,10 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
                                                             const newWidth = Math.max(50, Math.min(startWidth + deltaX, canvasWidth - pixelX));
                                                             const newHeight = Math.max(20, Math.min(startHeight + deltaY, canvasHeight - pixelY));
 
+                                                            // Convert canvas pixels back to PDF page percentages (0-100)
                                                             updateZone(zone.id, {
-                                                                width: newWidth / canvasWidth,
-                                                                height: newHeight / canvasHeight,
+                                                                width: (newWidth / canvasWidth) * 100,
+                                                                height: (newHeight / canvasHeight) * 100,
                                                             });
                                                         };
 
@@ -838,28 +859,9 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
 
             {/* Edit Zone Modal */}
             {editingZone && (() => {
-                // Get PDF page dimensions for the zone's page
-                const pageSize = pageDimensions.get(editingZone.page);
-                if (!pageSize) {
-                    return (
-                        <Modal
-                            isOpen={true}
-                            onClose={() => setEditingZone(null)}
-                            title="Edit Signature Zone"
-                        >
-                            <div className="text-center text-secondary-600 py-4">
-                                Loading page dimensions...
-                            </div>
-                        </Modal>
-                    );
-                }
-
-                // Convert normalized (0-1) to PDF pixels
-                const pixelX = Math.round(editingZone.x * pageSize.width);
-                const pixelY = Math.round(editingZone.y * pageSize.height);
-                const pixelWidth = Math.round(editingZone.width * pageSize.width);
-                const pixelHeight = Math.round(editingZone.height * pageSize.height);
-
+                // Zone coordinates are already in 0-100 percentage format
+                // No need to convert from page dimensions
+                
                 return (
                     <Modal
                         isOpen={true}
@@ -894,42 +896,42 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
                                 </div>
                             </div>
 
-                            {/* PDF Info */}
+                            {/* Info */}
                             <div className="bg-blue-50 border border-blue-200 rounded p-2 text-xs text-blue-700">
-                                PDF Page Size: {pageSize.width} × {pageSize.height} px
+                                💡 Coordinates are stored as percentages (0-100) of the PDF page dimensions
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-secondary-700 mb-1">
-                                        X Position (px)
+                                        X Position (%)
                                     </label>
                                     <Input
                                         type="number"
-                                        step="1"
-                                        value={pixelX}
+                                        step="0.1"
+                                        value={editingZone.x.toFixed(2)}
                                         onChange={(e) => {
-                                            const newPixelX = parseFloat(e.target.value) || 0;
-                                            setEditingZone({ ...editingZone, x: newPixelX / pageSize.width });
+                                            const newX = parseFloat(e.target.value) || 0;
+                                            setEditingZone({ ...editingZone, x: Math.max(0, Math.min(100, newX)) });
                                         }}
                                         min={0}
-                                        max={pageSize.width}
+                                        max={100}
                                     />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-secondary-700 mb-1">
-                                        Y Position (px)
+                                        Y Position (%)
                                     </label>
                                     <Input
                                         type="number"
-                                        step="1"
-                                        value={pixelY}
+                                        step="0.1"
+                                        value={editingZone.y.toFixed(2)}
                                         onChange={(e) => {
-                                            const newPixelY = parseFloat(e.target.value) || 0;
-                                            setEditingZone({ ...editingZone, y: newPixelY / pageSize.height });
+                                            const newY = parseFloat(e.target.value) || 0;
+                                            setEditingZone({ ...editingZone, y: Math.max(0, Math.min(100, newY)) });
                                         }}
                                         min={0}
-                                        max={pageSize.height}
+                                        max={100}
                                     />
                                 </div>
                             </div>
@@ -937,34 +939,34 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-secondary-700 mb-1">
-                                        Width (px)
+                                        Width (%)
                                     </label>
                                     <Input
                                         type="number"
-                                        step="1"
-                                        value={pixelWidth}
+                                        step="0.1"
+                                        value={editingZone.width.toFixed(2)}
                                         onChange={(e) => {
-                                            const newPixelWidth = parseFloat(e.target.value) || 50;
-                                            setEditingZone({ ...editingZone, width: newPixelWidth / pageSize.width });
+                                            const newWidth = parseFloat(e.target.value) || 1;
+                                            setEditingZone({ ...editingZone, width: Math.max(1, Math.min(100, newWidth)) });
                                         }}
-                                        min={50}
-                                        max={pageSize.width}
+                                        min={1}
+                                        max={100}
                                     />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-secondary-700 mb-1">
-                                        Height (px)
+                                        Height (%)
                                     </label>
                                     <Input
                                         type="number"
-                                        step="1"
-                                        value={pixelHeight}
+                                        step="0.1"
+                                        value={editingZone.height.toFixed(2)}
                                         onChange={(e) => {
-                                            const newPixelHeight = parseFloat(e.target.value) || 20;
-                                            setEditingZone({ ...editingZone, height: newPixelHeight / pageSize.height });
+                                            const newHeight = parseFloat(e.target.value) || 1;
+                                            setEditingZone({ ...editingZone, height: Math.max(1, Math.min(100, newHeight)) });
                                         }}
-                                        min={20}
-                                        max={pageSize.height}
+                                        min={1}
+                                        max={100}
                                     />
                                 </div>
                             </div>

@@ -372,8 +372,9 @@ export default function DocumentDetail() {
                                         </div>
 
                                         <div className="text-xs text-secondary-600 mb-3">
-                                            Position: ({Math.round(zone.x)}, {Math.round(zone.y)})
-                                            Size: {Math.round(zone.width)}×{Math.round(zone.height)}
+                                            Position: ({zone.x.toFixed(2)}%, {zone.y.toFixed(2)}%)
+                                            <br />
+                                            Size: {zone.width.toFixed(2)}% × {zone.height.toFixed(2)}%
                                         </div>
 
                                         {zone.assignedTo ? (
