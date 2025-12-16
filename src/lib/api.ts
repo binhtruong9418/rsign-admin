@@ -21,7 +21,7 @@ import type {
 import { JWT_STORAGE_KEY, USER_STORAGE_KEY } from "@/lib/constant";
 
 export const api = axios.create({
-    baseURL: "http://api-beta.rsign.io.vn/api", // This will be proxied by Vite to your backend
+    baseURL: "https://api-beta.rsign.io.vn/api", // This will be proxied by Vite to your backend
     timeout: 10000,
     headers: {
         "Content-Type": "application/json",
