@@ -13,7 +13,6 @@ import {
     X,
     Plus,
     Bell,
-    Palette,
 } from 'lucide-react';
 
 interface AdminLayoutProps {

@@ -24,12 +24,7 @@ export default function Dashboard() {
         queryFn: () => usersAPI.getUsers({ limit: 1 }),
     });
 
-    const { data: groupsData, isLoading: groupsLoading } = useQuery({
-        queryKey: ['dashboard-groups'],
-        queryFn: () => signerGroupsAPI.getSignerGroups({ limit: 1 }),
-    });
-
-    const isLoading = documentsLoading || usersLoading || groupsLoading;
+    const isLoading = documentsLoading || usersLoading;
     const recentDocuments = documentsData?.items || [];
     const totalDocuments = documentsData?.total || 0;
     const totalUsers = usersData?.total || 0;

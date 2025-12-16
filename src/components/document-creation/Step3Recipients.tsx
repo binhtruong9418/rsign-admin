@@ -7,7 +7,7 @@ import { Select } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { usersAPI, signerGroupsAPI } from '@/lib/api';
-import type { DocumentData, User, SignerGroup, Signer, SigningStep } from '@/types/document-creation';
+import type { DocumentData, User, Signer, SigningStep } from '@/types/document-creation';
 
 interface Step3RecipientsProps {
     documentData: DocumentData;
@@ -156,7 +156,6 @@ function IndividualRecipients({
     searchQuery,
     setSearchQuery,
     filteredUsers,
-    users,
     groups,
     documentData,
     updateDocumentData,

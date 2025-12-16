@@ -1,5 +1,4 @@
 import { toast } from "react-hot-toast";
-import { CheckCircle, XCircle, AlertCircle, Info } from "lucide-react";
 
 // Custom toast styles matching our design system
 const toastStyles = {
