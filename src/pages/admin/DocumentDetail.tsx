@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Document, Page, pdfjs } from 'react-pdf';
@@ -41,7 +41,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 // Signer colors for signature zones
 const SIGNER_COLORS = [
     '#3b82f6', // Blue
-    '#10b981', // Green  
+    '#10b981', // Green
     '#f59e0b', // Yellow
     '#ef4444', // Red
     '#8b5cf6', // Purple
@@ -49,6 +49,21 @@ const SIGNER_COLORS = [
     '#14b8a6', // Teal
     '#f97316', // Orange
 ];
+
+// Helper function to create signer color map
+function createSignerColorMap(signingSteps: any[] | undefined): Map<string, string> {
+    const colorMap = new Map<string, string>();
+    if (!signingSteps) return colorMap;
+
+    let signerIndex = 0;
+    for (const step of signingSteps) {
+        for (const signer of step.signers || []) {
+            colorMap.set(signer.id, SIGNER_COLORS[signerIndex % SIGNER_COLORS.length]);
+            signerIndex++;
+        }
+    }
+    return colorMap;
+}
 
 export default function DocumentDetail() {
     const { id } = useParams<{ id: string }>();
@@ -65,6 +80,21 @@ export default function DocumentDetail() {
         queryFn: () => documentsAPI.getDocument(id!),
         enabled: !!id,
     });
+
+    // Memoize signer color map - must be before conditional returns
+    const signerColorMap = useMemo(() => createSignerColorMap(document?.signingSteps), [document?.signingSteps]);
+
+    // Memoize progress calculation - must be before conditional returns
+    const { totalSigners, completedSigners, progressPercentage } = useMemo(() => {
+        if (!document) return { totalSigners: 0, completedSigners: 0, progressPercentage: 0 };
+
+        const total = document.signingSteps?.reduce((sum, step) => sum + (step.signers?.length || 0), 0) || 0;
+        const completed = document.signingSteps?.reduce((sum, step) =>
+            sum + (step.signers?.filter(signer => signer.status === 'SIGNED').length || 0), 0) || 0;
+        const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+        return { totalSigners: total, completedSigners: completed, progressPercentage: percentage };
+    }, [document]);
 
     const handleSendDocument = async () => {
         if (!document?.id) return;
@@ -100,12 +130,6 @@ export default function DocumentDetail() {
     }
 
     const statusLabel = getStatusLabel(document.status);
-
-    // Calculate progress from signing steps
-    const totalSigners = document.signingSteps?.reduce((sum, step) => sum + (step.signers?.length || 0), 0) || 0;
-    const completedSigners = document.signingSteps?.reduce((sum, step) =>
-        sum + (step.signers?.filter(signer => signer.status === 'SIGNED').length || 0), 0) || 0;
-    const progressPercentage = totalSigners > 0 ? Math.round((completedSigners / totalSigners) * 100) : 0;
 
     return (
         <div className="space-y-6">
@@ -427,23 +451,9 @@ export default function DocumentDetail() {
                         {document.signatureZones && document.signatureZones.length > 0 ? (
                             <div className="space-y-3">
                                 {document.signatureZones.map((zone: any, index: number) => {
-                                    // Get signer color
-                                    const getSignerColor = (signerId: string) => {
-                                        if (!document.signingSteps) return SIGNER_COLORS[0];
-
-                                        let signerIndex = 0;
-                                        for (const step of document.signingSteps) {
-                                            for (const signer of step.signers || []) {
-                                                if (signer.id === signerId) {
-                                                    return SIGNER_COLORS[signerIndex % SIGNER_COLORS.length];
-                                                }
-                                                signerIndex++;
-                                            }
-                                        }
-                                        return SIGNER_COLORS[0];
-                                    };
-
-                                    const signerColor = zone.assignedTo ? getSignerColor(zone.assignedTo.id) : '#6b7280';
+                                    const signerColor = zone.assignedTo
+                                        ? (signerColorMap.get(zone.assignedTo.id) || SIGNER_COLORS[0])
+                                        : '#6b7280';
 
                                     return (
                                         <div key={zone.id} className="border border-secondary-200 rounded-lg p-4 hover:bg-secondary-50 transition-colors">
@@ -739,6 +749,163 @@ export default function DocumentDetail() {
     );
 }
 
+// Helper hook for canvas dimensions
+function useCanvasDimensions(containerRef: React.RefObject<HTMLDivElement>, dependencies: any[]) {
+    const [canvasDimensions, setCanvasDimensions] = useState<{ width: number; height: number } | null>(null);
+
+    const updateCanvasDimensions = useCallback(() => {
+        if (!containerRef.current) return;
+
+        const canvas = containerRef.current.querySelector('.react-pdf__Page canvas') as HTMLCanvasElement;
+        if (canvas) {
+            setCanvasDimensions({
+                width: canvas.offsetWidth,
+                height: canvas.offsetHeight
+            });
+        }
+    }, [containerRef]);
+
+    useEffect(() => {
+        const timer = setTimeout(updateCanvasDimensions, 300);
+        window.addEventListener('resize', updateCanvasDimensions);
+
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener('resize', updateCanvasDimensions);
+        };
+    }, dependencies);
+
+    return { canvasDimensions, updateCanvasDimensions };
+}
+
+// Memoized signature zone overlay component
+interface SignatureZoneOverlayProps {
+    zone: any;
+    index: number;
+    scale: number;
+    canvasDimensions: { width: number; height: number };
+    signerColor: string;
+    isHovered: boolean;
+    onMouseEnter: () => void;
+    onMouseLeave: () => void;
+}
+
+const SignatureZoneOverlay = memo(({
+    zone,
+    index,
+    scale,
+    signerColor,
+    isHovered,
+    onMouseEnter,
+    onMouseLeave,
+}: SignatureZoneOverlayProps) => {
+    const x = zone.x * scale;
+    const y = zone.y * scale;
+    const width = zone.width * scale;
+    const height = zone.height * scale;
+
+    const assignedSigner = zone.assignedTo;
+
+    return (
+        <div
+            className={cn(
+                "absolute border-2 transition-all duration-200 cursor-pointer",
+                isHovered
+                    ? "border-solid shadow-lg z-20"
+                    : "border-dashed border-opacity-60 z-10",
+                assignedSigner?.status === 'SIGNED'
+                    ? "bg-green-500 bg-opacity-20 border-green-500"
+                    : "bg-opacity-10"
+            )}
+            style={{
+                left: x,
+                top: y,
+                width: width,
+                height: height,
+                borderColor: signerColor,
+                backgroundColor: `${signerColor}20`,
+            }}
+            onMouseEnter={onMouseEnter}
+            onMouseLeave={onMouseLeave}
+        >
+            <div
+                className="absolute -top-7 left-0 px-2 py-1 rounded text-xs font-medium text-white whitespace-nowrap"
+                style={{ backgroundColor: signerColor }}
+            >
+                {assignedSigner ? (
+                    <>
+                        {assignedSigner.user.fullName || assignedSigner.user.email}
+                        {assignedSigner.status === 'SIGNED' && ' ✓'}
+                    </>
+                ) : (
+                    zone.label || `Zone ${index + 1}`
+                )}
+            </div>
+
+            {assignedSigner?.status === 'SIGNED' && (
+                <div className="absolute top-1 right-1">
+                    <CheckCircle className="h-4 w-4 text-green-600 bg-white rounded-full" />
+                </div>
+            )}
+        </div>
+    );
+});
+
+SignatureZoneOverlay.displayName = 'SignatureZoneOverlay';
+
+// Memoized zone legend item component
+interface ZoneLegendItemProps {
+    zone: any;
+    index: number;
+    signerColor: string;
+    isHovered: boolean;
+    onMouseEnter: () => void;
+    onMouseLeave: () => void;
+}
+
+const ZoneLegendItem = memo(({
+    zone,
+    index,
+    signerColor,
+    isHovered,
+    onMouseEnter,
+    onMouseLeave,
+}: ZoneLegendItemProps) => {
+    const assignedSigner = zone.assignedTo;
+
+    return (
+        <div
+            className={cn(
+                "flex items-center gap-2 p-2 rounded border transition-colors",
+                isHovered ? "bg-white border-primary-300" : "bg-white border-secondary-200"
+            )}
+            onMouseEnter={onMouseEnter}
+            onMouseLeave={onMouseLeave}
+        >
+            <div
+                className="w-3 h-3 rounded border-2"
+                style={{
+                    borderColor: signerColor,
+                    backgroundColor: `${signerColor}40`
+                }}
+            />
+            <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-secondary-900 truncate">
+                    {assignedSigner?.user.fullName || assignedSigner?.user.email || `Zone ${index + 1}`}
+                </p>
+                <p className="text-xs text-secondary-500">
+                    {zone.label || 'No label'} • {assignedSigner?.status || 'Unassigned'}
+                </p>
+            </div>
+            {assignedSigner?.status === 'SIGNED' && (
+                <CheckCircle className="h-4 w-4 text-green-600" />
+            )}
+        </div>
+    );
+});
+
+ZoneLegendItem.displayName = 'ZoneLegendItem';
+
 // PDF Viewer with Signature Zones Component
 interface PDFViewerWithZonesProps {
     document: any;
@@ -750,7 +917,7 @@ interface PDFViewerWithZonesProps {
     onScaleChange: (scale: number) => void;
 }
 
-function PDFViewerWithZones({
+const PDFViewerWithZones = memo(({
     document,
     numPages,
     currentPage,
@@ -758,68 +925,73 @@ function PDFViewerWithZones({
     onDocumentLoadSuccess,
     onPageChange,
     onScaleChange,
-}: PDFViewerWithZonesProps) {
+}: PDFViewerWithZonesProps) => {
     const [hoveredZone, setHoveredZone] = useState<string | null>(null);
-    const [canvasDimensions, setCanvasDimensions] = useState<{ width: number; height: number } | null>(null);
     const pdfContainerRef = useRef<HTMLDivElement | null>(null);
 
-    // Update canvas dimensions when PDF loads or scale changes
-    useEffect(() => {
-        const updateCanvasDimensions = () => {
-            if (!pdfContainerRef.current) return;
+    // Use custom hook for canvas dimensions
+    const { canvasDimensions, updateCanvasDimensions } = useCanvasDimensions(
+        pdfContainerRef,
+        [currentPage, scale, numPages]
+    );
 
-            // Find canvas within our container
-            const canvas = pdfContainerRef.current.querySelector('.react-pdf__Page canvas') as HTMLCanvasElement;
-            if (canvas) {
-                setCanvasDimensions({
-                    width: canvas.offsetWidth,
-                    height: canvas.offsetHeight
-                });
-                console.log('Canvas dimensions updated:', canvas.offsetWidth, canvas.offsetHeight);
-            } else {
-                console.log('Canvas not found in container');
-            }
-        };
-
-        // Update dimensions after a short delay to ensure PDF is rendered
-        const timer = setTimeout(updateCanvasDimensions, 300);
-
-        // Also update on window resize
-        const handleResize = () => updateCanvasDimensions();
-        window.addEventListener('resize', handleResize);
-
-        return () => {
-            clearTimeout(timer);
-            window.removeEventListener('resize', handleResize);
-        };
-    }, [currentPage, scale, numPages]);
-
-    const onDocumentLoadError = (error: Error) => {
+    const onDocumentLoadError = useCallback((error: Error) => {
         console.error('Error loading PDF:', error);
-    };
+    }, []);
 
-    // Get signature zones for current page
-    const currentPageZones = document.signatureZones?.filter(
-        (zone: any) => zone.pageNumber === currentPage
-    ) || [];
-
-    // Assign colors to signers
-    const getSignerColor = (signerId: string) => {
-        if (!document.signingSteps) return SIGNER_COLORS[0];
+    // Memoized signer color map to avoid recalculation
+    const signerColorMap = useMemo(() => {
+        const colorMap = new Map<string, string>();
+        if (!document.signingSteps) return colorMap;
 
         let signerIndex = 0;
         for (const step of document.signingSteps) {
             for (const signer of step.signers || []) {
-                if (signer.id === signerId) {
-                    return SIGNER_COLORS[signerIndex % SIGNER_COLORS.length];
-                }
+                colorMap.set(signer.id, SIGNER_COLORS[signerIndex % SIGNER_COLORS.length]);
                 signerIndex++;
             }
         }
-        return SIGNER_COLORS[0];
-    };
+        return colorMap;
+    }, [document.signingSteps]);
 
-    console.log(canvasDimensions, currentPageZones)
+    // Memoized function to get signer color
+    const getSignerColor = useCallback((signerId: string) => {
+        return signerColorMap.get(signerId) || SIGNER_COLORS[0];
+    }, [signerColorMap]);
+
+    // Memoized current page zones
+    const currentPageZones = useMemo(() => {
+        return document.signatureZones?.filter(
+            (zone: any) => zone.pageNumber === currentPage
+        ) || [];
+    }, [document.signatureZones, currentPage]);
+
+    // Memoized handlers for page and scale changes
+    const handlePagePrevious = useCallback(() => {
+        onPageChange(Math.max(1, currentPage - 1));
+    }, [currentPage, onPageChange]);
+
+    const handlePageNext = useCallback(() => {
+        onPageChange(Math.min(numPages || 1, currentPage + 1));
+    }, [currentPage, numPages, onPageChange]);
+
+    const handleZoomOut = useCallback(() => {
+        onScaleChange(Math.max(0.5, scale - 0.1));
+    }, [scale, onScaleChange]);
+
+    const handleZoomIn = useCallback(() => {
+        onScaleChange(Math.min(2.0, scale + 0.1));
+    }, [scale, onScaleChange]);
+
+    // Memoized PDF load success handler
+    const handleDocumentLoadSuccess = useCallback((pdf: { numPages: number }) => {
+        onDocumentLoadSuccess(pdf);
+        setTimeout(updateCanvasDimensions, 300);
+    }, [onDocumentLoadSuccess, updateCanvasDimensions]);
+
+    const handlePageLoadSuccess = useCallback(() => {
+        setTimeout(updateCanvasDimensions, 150);
+    }, [updateCanvasDimensions]);
 
     return (
         <div className="space-y-4">
@@ -829,7 +1001,7 @@ function PDFViewerWithZones({
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+                        onClick={handlePagePrevious}
                         disabled={currentPage <= 1}
                     >
                         <ChevronLeft className="h-4 w-4" />
@@ -840,7 +1012,7 @@ function PDFViewerWithZones({
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => onPageChange(Math.min(numPages || 1, currentPage + 1))}
+                        onClick={handlePageNext}
                         disabled={currentPage >= (numPages || 1)}
                     >
                         <ChevronRight className="h-4 w-4" />
@@ -851,7 +1023,7 @@ function PDFViewerWithZones({
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => onScaleChange(Math.max(0.5, scale - 0.1))}
+                        onClick={handleZoomOut}
                         disabled={scale <= 0.5}
                     >
                         <ZoomOut className="h-4 w-4" />
@@ -862,7 +1034,7 @@ function PDFViewerWithZones({
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => onScaleChange(Math.min(2.0, scale + 0.1))}
+                        onClick={handleZoomIn}
                         disabled={scale >= 2.0}
                     >
                         <ZoomIn className="h-4 w-4" />
@@ -876,24 +1048,7 @@ function PDFViewerWithZones({
                     <div ref={pdfContainerRef} className="relative">
                         <Document
                             file={document.originalFileUrl}
-                            onLoadSuccess={(pdf) => {
-                                onDocumentLoadSuccess(pdf);
-                                // Trigger canvas dimensions update after PDF loads
-                                setTimeout(() => {
-                                    if (pdfContainerRef.current) {
-                                        const canvas = pdfContainerRef.current.querySelector('.react-pdf__Page canvas') as HTMLCanvasElement;
-                                        if (canvas) {
-                                            setCanvasDimensions({
-                                                width: canvas.offsetWidth,
-                                                height: canvas.offsetHeight
-                                            });
-                                            console.log('Canvas dimensions set in onLoadSuccess:', canvas.offsetWidth, canvas.offsetHeight);
-                                        } else {
-                                            console.log('Canvas not found in onLoadSuccess');
-                                        }
-                                    }
-                                }, 300);
-                            }}
+                            onLoadSuccess={handleDocumentLoadSuccess}
                             onLoadError={onDocumentLoadError}
                             loading={
                                 <div className="flex items-center justify-center h-96 w-full">
@@ -918,23 +1073,7 @@ function PDFViewerWithZones({
                                 scale={scale}
                                 renderTextLayer={false}
                                 renderAnnotationLayer={false}
-                                onLoadSuccess={() => {
-                                    // Update canvas dimensions when page loads
-                                    setTimeout(() => {
-                                        if (pdfContainerRef.current) {
-                                            const canvas = pdfContainerRef.current.querySelector('.react-pdf__Page canvas') as HTMLCanvasElement;
-                                            if (canvas) {
-                                                setCanvasDimensions({
-                                                    width: canvas.offsetWidth,
-                                                    height: canvas.offsetHeight
-                                                });
-                                                console.log('Canvas dimensions set in Page onLoadSuccess:', canvas.offsetWidth, canvas.offsetHeight);
-                                            } else {
-                                                console.log('Canvas not found in Page onLoadSuccess');
-                                            }
-                                        }
-                                    }, 150);
-                                }}
+                                onLoadSuccess={handlePageLoadSuccess}
                             />
                         </Document>
 
@@ -954,66 +1093,20 @@ function PDFViewerWithZones({
 
                         {/* Signature Zones Overlay */}
                         {canvasDimensions && currentPageZones.map((zone: any, index: number) => {
-                            const canvasWidth = canvasDimensions.width;
-                            const canvasHeight = canvasDimensions.height;
-
-                            // Convert zone coordinates based on their format
-                            // Assume zones are in PDF coordinate system (points) and need to be scaled to canvas
-                            const pdfToCanvasRatio = scale; // Since canvas is scaled by the same ratio
-
-                            const x = zone.x * pdfToCanvasRatio;
-                            const y = zone.y * pdfToCanvasRatio;
-                            const width = zone.width * pdfToCanvasRatio;
-                            const height = zone.height * pdfToCanvasRatio;
-
-                            const assignedSigner = zone.assignedTo;
-                            const signerColor = assignedSigner ? getSignerColor(assignedSigner.id) : '#6b7280';
+                            const signerColor = zone.assignedTo ? getSignerColor(zone.assignedTo.id) : '#6b7280';
 
                             return (
-                                <div
+                                <SignatureZoneOverlay
                                     key={zone.id}
-                                    className={cn(
-                                        "absolute border-2 transition-all duration-200 cursor-pointer",
-                                        hoveredZone === zone.id
-                                            ? "border-solid shadow-lg z-20"
-                                            : "border-dashed border-opacity-60 z-10",
-                                        assignedSigner?.status === 'SIGNED'
-                                            ? "bg-green-500 bg-opacity-20 border-green-500"
-                                            : "bg-opacity-10"
-                                    )}
-                                    style={{
-                                        left: x,
-                                        top: y,
-                                        width: width,
-                                        height: height,
-                                        borderColor: signerColor,
-                                        backgroundColor: `${signerColor}20`,
-                                    }}
+                                    zone={zone}
+                                    index={index}
+                                    scale={scale}
+                                    canvasDimensions={canvasDimensions}
+                                    signerColor={signerColor}
+                                    isHovered={hoveredZone === zone.id}
                                     onMouseEnter={() => setHoveredZone(zone.id)}
                                     onMouseLeave={() => setHoveredZone(null)}
-                                >
-                                    {/* Zone Label */}
-                                    <div
-                                        className="absolute -top-7 left-0 px-2 py-1 rounded text-xs font-medium text-white whitespace-nowrap"
-                                        style={{ backgroundColor: signerColor }}
-                                    >
-                                        {assignedSigner ? (
-                                            <>
-                                                {assignedSigner.user.fullName || assignedSigner.user.email}
-                                                {assignedSigner.status === 'SIGNED' && ' ✓'}
-                                            </>
-                                        ) : (
-                                            zone.label || `Zone ${index + 1}`
-                                        )}
-                                    </div>
-
-                                    {/* Zone Status Icon */}
-                                    {assignedSigner?.status === 'SIGNED' && (
-                                        <div className="absolute top-1 right-1">
-                                            <CheckCircle className="h-4 w-4 text-green-600 bg-white rounded-full" />
-                                        </div>
-                                    )}
-                                </div>
+                                />
                             );
                         })}
                     </div>
@@ -1028,38 +1121,18 @@ function PDFViewerWithZones({
                     </h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {currentPageZones.map((zone: any, index: number) => {
-                            const assignedSigner = zone.assignedTo;
-                            const signerColor = assignedSigner ? getSignerColor(assignedSigner.id) : '#6b7280';
+                            const signerColor = zone.assignedTo ? getSignerColor(zone.assignedTo.id) : '#6b7280';
 
                             return (
-                                <div
+                                <ZoneLegendItem
                                     key={zone.id}
-                                    className={cn(
-                                        "flex items-center gap-2 p-2 rounded border transition-colors",
-                                        hoveredZone === zone.id ? "bg-white border-primary-300" : "bg-white border-secondary-200"
-                                    )}
+                                    zone={zone}
+                                    index={index}
+                                    signerColor={signerColor}
+                                    isHovered={hoveredZone === zone.id}
                                     onMouseEnter={() => setHoveredZone(zone.id)}
                                     onMouseLeave={() => setHoveredZone(null)}
-                                >
-                                    <div
-                                        className="w-3 h-3 rounded border-2"
-                                        style={{
-                                            borderColor: signerColor,
-                                            backgroundColor: `${signerColor}40`
-                                        }}
-                                    />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-medium text-secondary-900 truncate">
-                                            {assignedSigner?.user.fullName || assignedSigner?.user.email || `Zone ${index + 1}`}
-                                        </p>
-                                        <p className="text-xs text-secondary-500">
-                                            {zone.label || 'No label'} • {assignedSigner?.status || 'Unassigned'}
-                                        </p>
-                                    </div>
-                                    {assignedSigner?.status === 'SIGNED' && (
-                                        <CheckCircle className="h-4 w-4 text-green-600" />
-                                    )}
-                                </div>
+                                />
                             );
                         })}
                     </div>
@@ -1067,7 +1140,9 @@ function PDFViewerWithZones({
             )}
         </div>
     );
-}
+});
+
+PDFViewerWithZones.displayName = 'PDFViewerWithZones';
 
 function DocumentDetailSkeleton() {
     return (
