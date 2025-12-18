@@ -13,6 +13,7 @@ import {
     X,
     Plus,
     Bell,
+    Folder,
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -22,6 +23,7 @@ interface AdminLayoutProps {
 const navigation = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Documents', href: '/admin/documents', icon: FileText },
+    { name: 'Document Batches', href: '/admin/document-batches', icon: Folder },
     { name: 'Users', href: '/admin/users', icon: Users },
     { name: 'Signer Groups', href: '/admin/signer-groups', icon: Users },
     { name: 'Settings', href: '/admin/settings', icon: Settings },

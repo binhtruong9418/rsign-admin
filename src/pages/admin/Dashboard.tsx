@@ -6,10 +6,11 @@ import {
     CheckCircle,
     Users,
     TrendingUp,
-    Plus
+    Plus,
+    Folder
 } from 'lucide-react';
 import { cn, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
-import { documentsAPI, signerGroupsAPI, usersAPI } from '@/lib/api';
+import { documentsAPI, signerGroupsAPI, usersAPI, documentBatchAPI } from '@/lib/api';
 import type { Document } from '@/types';
 
 export default function Dashboard() {
@@ -24,16 +25,22 @@ export default function Dashboard() {
         queryFn: () => usersAPI.getUsers({ limit: 1 }),
     });
 
-    const isLoading = documentsLoading || usersLoading;
+    const { data: batchesData, isLoading: batchesLoading } = useQuery({
+        queryKey: ['dashboard-batches'],
+        queryFn: () => documentBatchAPI.getDocumentBatches({ limit: 1 }),
+    });
+
+    const isLoading = documentsLoading || usersLoading || batchesLoading;
     const recentDocuments = documentsData?.items || [];
     const totalDocuments = documentsData?.total || 0;
     const totalUsers = usersData?.total || 0;
-    
+    const totalBatches = batchesData?.total || 0;
+
     // Calculate pending and completed documents from the fetched data
-    const pendingDocuments = recentDocuments.filter(doc => 
+    const pendingDocuments = recentDocuments.filter(doc =>
         doc.status === 'PENDING' || doc.status === 'IN_PROGRESS'
     ).length;
-    const completedDocuments = recentDocuments.filter(doc => 
+    const completedDocuments = recentDocuments.filter(doc =>
         doc.status === 'COMPLETED'
     ).length;
 
@@ -63,7 +70,7 @@ export default function Dashboard() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                 <StatCard
                     title="Total Documents"
                     value={totalDocuments.toLocaleString()}
@@ -84,6 +91,13 @@ export default function Dashboard() {
                     icon={CheckCircle}
                     color="success"
                     trend={+15.3}
+                />
+                <StatCard
+                    title="Active Batches"
+                    value={totalBatches.toString()}
+                    icon={Folder}
+                    color="primary"
+                    trend={+2.1}
                 />
                 <StatCard
                     title="Total Signers"

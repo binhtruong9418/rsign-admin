@@ -1,23 +1,27 @@
 import axios, { type AxiosError, type AxiosResponse } from "axios";
 import { storage } from "@/lib/utils";
 import type {
-  ApiError,
-  LoginResponse,
-  CreateDocumentRequest,
-  DocumentCreateResponse,
-  CreateSignerGroupRequest,
-  UploadUrlRequest,
-  UploadUrlResponse,
-  PaginationResponse,
-  User,
-  Document,
-  SignerGroup,
-  DocumentProgressResponse,
-  PendingDocumentItem,
-  DocumentSigningDetails,
-  CheckoutResponse,
-  SignDocumentRequest,
-} from "@/types";// Create axios instance with base configuration
+    ApiError,
+    LoginResponse,
+    CreateDocumentRequest,
+    DocumentCreateResponse,
+    CreateSignerGroupRequest,
+    UploadUrlRequest,
+    UploadUrlResponse,
+    PaginationResponse,
+    User,
+    Document,
+    SignerGroup,
+    DocumentProgressResponse,
+    PendingDocumentItem,
+    DocumentSigningDetails,
+    CheckoutResponse,
+    SignDocumentRequest,
+    DocumentBatch,
+    DocumentBatchFilters,
+    EnhancedDocumentFilters,
+    BatchSendResponse,
+} from "@/types"; // Create axios instance with base configuration
 import { JWT_STORAGE_KEY, USER_STORAGE_KEY } from "@/lib/constant";
 
 export const api = axios.create({
@@ -111,13 +115,9 @@ export const authAPI = {
 };
 
 export const documentsAPI = {
-    getDocuments: async (params: {
-        page?: number;
-        limit?: number;
-        status?: string;
-        signingMode?: string;
-        search?: string;
-    }): Promise<PaginationResponse<Document>> => {
+    getDocuments: async (
+        params: EnhancedDocumentFilters
+    ): Promise<PaginationResponse<Document>> => {
         const response = await api.get("/admin/documents", { params });
         return response.data;
     },
@@ -309,6 +309,38 @@ export const signingAPI = {
         limit?: number;
     }): Promise<PaginationResponse<any>> => {
         const response = await api.get("/documents/history", { params });
+        return response.data;
+    },
+};
+
+// Document Batch Management API
+export const documentBatchAPI = {
+    getDocumentBatches: async (
+        params: DocumentBatchFilters
+    ): Promise<PaginationResponse<DocumentBatch>> => {
+        const response = await api.get("/admin/document-batches", { params });
+        return response.data;
+    },
+
+    getDocumentBatch: async (batchId: string): Promise<DocumentBatch> => {
+        const response = await api.get(`/admin/document-batches/${batchId}`);
+        return response.data;
+    },
+
+    sendDocumentBatch: async (batchId: string): Promise<BatchSendResponse> => {
+        const response = await api.post(
+            `/admin/document-batches/${batchId}/send`
+        );
+        return response.data;
+    },
+
+    getBatchDocuments: async (
+        batchId: string,
+        params?: { page?: number; limit?: number }
+    ): Promise<PaginationResponse<Document>> => {
+        const response = await api.get(`/admin/documents/batch/${batchId}`, {
+            params,
+        });
         return response.data;
     },
 };

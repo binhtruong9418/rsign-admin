@@ -200,8 +200,6 @@ export interface PaginationResponse<T> {
     hasPreviousPage: boolean;
 }
 
-
-
 // DTOs (Request Payloads)
 export interface CreateDocumentRequest {
     title: string;
@@ -323,4 +321,59 @@ export interface DocumentSigningDetails {
 export interface CheckoutResponse {
     sessionId: string;
     expiresIn: number;
+}
+
+// Document Batch Types
+export interface DocumentBatch {
+    batchId: string;
+    documentCount: number;
+    completedCount: number;
+    pendingCount: number;
+    inProgressCount: number;
+    createdAt: string;
+    deadline?: string;
+    createdBy: {
+        id: string;
+        fullName: string;
+        email: string;
+    };
+    completionRate: number;
+    status: "DRAFT" | "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+    title?: string;
+}
+
+export interface DocumentBatchFilters {
+    page?: number;
+    limit?: number;
+    status?: "COMPLETED" | "PENDING" | "IN_PROGRESS" | "DRAFT" | "CANCELLED";
+    search?: string;
+    dateFrom?: string;
+    dateTo?: string;
+}
+
+export interface EnhancedDocumentFilters {
+    page?: number;
+    limit?: number;
+    status?: DocumentStatus;
+    signingMode?: SigningMode;
+    signingFlow?: SigningFlow;
+    batchId?: string;
+    createdById?: string;
+    assignedUserId?: string;
+    search?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    hasDeadline?: boolean;
+    isTemplate?: boolean;
+}
+
+export interface BatchSendResponse {
+    success: boolean;
+    sentCount: number;
+    failedCount: number;
+    results: Array<{
+        documentId: string;
+        success: boolean;
+        error?: string;
+    }>;
 }

@@ -1,5 +1,9 @@
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
 import {
     ArrowLeft,
     FileText,
@@ -16,16 +20,45 @@ import {
     Timer,
     ExternalLink,
     Hash,
-    MapPin
+    MapPin,
+    ZoomIn,
+    ZoomOut,
+    ChevronLeft,
+    ChevronRight,
+    Eye
 } from 'lucide-react';
 import { formatDate, getStatusLabel, cn } from '@/lib/utils';
 import { documentsAPI } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 
+// Configure PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url,
+).toString();
+
+// Signer colors for signature zones
+const SIGNER_COLORS = [
+    '#3b82f6', // Blue
+    '#10b981', // Green  
+    '#f59e0b', // Yellow
+    '#ef4444', // Red
+    '#8b5cf6', // Purple
+    '#ec4899', // Pink
+    '#14b8a6', // Teal
+    '#f97316', // Orange
+];
+
 export default function DocumentDetail() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+
+    // PDF viewer state
+    const [numPages, setNumPages] = useState<number | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [scale, setScale] = useState(1.0);
+    const [showPreview, setShowPreview] = useState(false);
 
     const { data: document, isLoading, error } = useQuery({
         queryKey: ['document', id],
@@ -309,28 +342,61 @@ export default function DocumentDetail() {
                 {/* Document Preview */}
                 <div className="card">
                     <div className="px-6 py-4 border-b border-secondary-200">
-                        <h3 className="text-lg font-semibold text-secondary-900 flex items-center">
-                            <FileText className="h-5 w-5 mr-2" />
-                            Document Preview
-                        </h3>
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-secondary-900 flex items-center">
+                                <FileText className="h-5 w-5 mr-2" />
+                                Document Preview
+                            </h3>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setShowPreview(!showPreview)}
+                                >
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    {showPreview ? 'Hide' : 'Show'} Preview
+                                </Button>
+                                {document.originalFileUrl && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => window.open(document.originalFileUrl, '_blank')}
+                                    >
+                                        <ExternalLink className="h-4 w-4" />
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
                     </div>
                     <div className="p-6">
                         {document.originalFileUrl ? (
-                            <div className="aspect-[3/4] bg-secondary-100 rounded-lg flex items-center justify-center relative">
-                                <div className="text-center">
-                                    <FileText className="h-12 w-12 text-secondary-400 mx-auto mb-2" />
-                                    <p className="text-sm text-secondary-600">Document Preview</p>
-                                    <p className="text-xs text-secondary-500 mt-1">{document.title}</p>
-
+                            showPreview ? (
+                                <PDFViewerWithZones
+                                    document={document}
+                                    numPages={numPages}
+                                    currentPage={currentPage}
+                                    scale={scale}
+                                    onDocumentLoadSuccess={({ numPages }: { numPages: number }) => setNumPages(numPages)}
+                                    onPageChange={setCurrentPage}
+                                    onScaleChange={setScale}
+                                />
+                            ) : (
+                                <div className="aspect-[3/4] bg-secondary-100 rounded-lg flex items-center justify-center relative">
+                                    <div className="text-center">
+                                        <FileText className="h-12 w-12 text-secondary-400 mx-auto mb-2" />
+                                        <p className="text-sm text-secondary-600">Document Preview</p>
+                                        <p className="text-xs text-secondary-500 mt-1">{document.title}</p>
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => setShowPreview(true)}
+                                            className="mt-3"
+                                        >
+                                            <Eye className="h-4 w-4 mr-2" />
+                                            View PDF
+                                        </Button>
+                                    </div>
                                 </div>
-                                <Button
-                                    variant="outline"
-                                    onClick={() => window.open(document.originalFileUrl, '_blank')}
-                                    className="absolute top-3 right-3"
-                                >
-                                    <ExternalLink className="h-4 w-4" />
-                                </Button>
-                            </div>
+                            )
                         ) : (
                             <div className="aspect-[3/4] bg-secondary-100 rounded-lg flex items-center justify-center">
                                 <div className="text-center">
@@ -345,73 +411,114 @@ export default function DocumentDetail() {
                 {/* Signature Zones */}
                 <div className="card">
                     <div className="px-6 py-4 border-b border-secondary-200">
-                        <h3 className="text-lg font-semibold text-secondary-900 flex items-center">
-                            <MapPin className="h-5 w-5 mr-2" />
-                            Signature Zones ({document.signatureZones?.length || 0})
-                        </h3>
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-secondary-900 flex items-center">
+                                <MapPin className="h-5 w-5 mr-2" />
+                                Signature Zones ({document.signatureZones?.length || 0})
+                            </h3>
+                            {showPreview && (
+                                <p className="text-xs text-secondary-500">
+                                    Hover zones to highlight
+                                </p>
+                            )}
+                        </div>
                     </div>
                     <div className="p-6 max-h-96 overflow-y-auto">
                         {document.signatureZones && document.signatureZones.length > 0 ? (
                             <div className="space-y-3">
-                                {document.signatureZones.map((zone, index) => (
-                                    <div key={zone.id} className="border border-secondary-200 rounded-lg p-4">
-                                        <div className="flex items-start justify-between mb-2">
-                                            <div className="flex items-center space-x-2">
-                                                <span className="text-sm font-medium text-secondary-900">
-                                                    Zone #{index + 1}
-                                                </span>
-                                                {zone.label && (
-                                                    <Badge variant="secondary" className="text-xs">
-                                                        {zone.label}
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                            <span className="text-xs text-secondary-500">
-                                                Page {zone.pageNumber}
-                                            </span>
-                                        </div>
+                                {document.signatureZones.map((zone: any, index: number) => {
+                                    // Get signer color
+                                    const getSignerColor = (signerId: string) => {
+                                        if (!document.signingSteps) return SIGNER_COLORS[0];
 
-                                        <div className="text-xs text-secondary-600 mb-3">
-                                            Position: ({zone.x.toFixed(2)}%, {zone.y.toFixed(2)}%)
-                                            <br />
-                                            Size: {zone.width.toFixed(2)}% × {zone.height.toFixed(2)}%
-                                        </div>
+                                        let signerIndex = 0;
+                                        for (const step of document.signingSteps) {
+                                            for (const signer of step.signers || []) {
+                                                if (signer.id === signerId) {
+                                                    return SIGNER_COLORS[signerIndex % SIGNER_COLORS.length];
+                                                }
+                                                signerIndex++;
+                                            }
+                                        }
+                                        return SIGNER_COLORS[0];
+                                    };
 
-                                        {zone.assignedTo ? (
-                                            <div className="flex items-center justify-between p-2 bg-secondary-50 rounded">
-                                                <div className="flex items-center space-x-2">
-                                                    <div className="w-6 h-6 bg-primary-600 rounded-full flex items-center justify-center">
-                                                        <span className="text-xs font-medium text-white">
-                                                            {zone.assignedTo.user.fullName?.charAt(0) || zone.assignedTo.user.email.charAt(0)}
+                                    const signerColor = zone.assignedTo ? getSignerColor(zone.assignedTo.id) : '#6b7280';
+
+                                    return (
+                                        <div key={zone.id} className="border border-secondary-200 rounded-lg p-4 hover:bg-secondary-50 transition-colors">
+                                            <div className="flex items-start justify-between mb-3">
+                                                <div className="flex items-center space-x-3">
+                                                    <div
+                                                        className="w-4 h-4 rounded border-2"
+                                                        style={{
+                                                            borderColor: signerColor,
+                                                            backgroundColor: `${signerColor}40`
+                                                        }}
+                                                    />
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-sm font-medium text-secondary-900">
+                                                                Zone #{index + 1}
+                                                            </span>
+                                                            {zone.label && (
+                                                                <Badge variant="secondary" className="text-xs">
+                                                                    {zone.label}
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        <span className="text-xs text-secondary-500">
+                                                            Page {zone.pageNumber} • Position: ({zone.x.toFixed(1)}%, {zone.y.toFixed(1)}%)
                                                         </span>
                                                     </div>
-                                                    <div>
-                                                        <p className="text-xs font-medium text-secondary-900">
-                                                            {zone.assignedTo.user.fullName}
-                                                        </p>
-                                                        <p className="text-xs text-secondary-500">
-                                                            {zone.assignedTo.user.email}
-                                                        </p>
-                                                    </div>
                                                 </div>
-                                                <Badge
-                                                    variant={
-                                                        zone.assignedTo.status === 'SIGNED' ? 'success' :
-                                                            zone.assignedTo.status === 'PENDING' ? 'warning' : 'default'
-                                                    }
-                                                    className="text-xs"
-                                                >
-                                                    {zone.assignedTo.status}
-                                                </Badge>
+                                                {zone.assignedTo?.status === 'SIGNED' && (
+                                                    <CheckCircle className="h-4 w-4 text-green-600" />
+                                                )}
                                             </div>
-                                        ) : (
-                                            <div className="text-center py-2">
-                                                <AlertCircle className="h-4 w-4 text-secondary-400 mx-auto mb-1" />
-                                                <p className="text-xs text-secondary-500">Unassigned</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
+
+                                            {zone.assignedTo ? (
+                                                <div className="flex items-center justify-between p-3 bg-secondary-50 rounded-lg">
+                                                    <div className="flex items-center space-x-3">
+                                                        <div
+                                                            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium"
+                                                            style={{ backgroundColor: signerColor }}
+                                                        >
+                                                            {zone.assignedTo.user.fullName?.charAt(0) || zone.assignedTo.user.email.charAt(0)}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-medium text-secondary-900 truncate">
+                                                                {zone.assignedTo.user.fullName || zone.assignedTo.user.email}
+                                                            </p>
+                                                            <p className="text-xs text-secondary-500 truncate">
+                                                                {zone.assignedTo.user.email}
+                                                            </p>
+                                                            {zone.assignedTo.signedAt && (
+                                                                <p className="text-xs text-green-600 mt-1">
+                                                                    Signed {formatDate(zone.assignedTo.signedAt, 'relative')}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <Badge
+                                                        variant={
+                                                            zone.assignedTo.status === 'SIGNED' ? 'success' :
+                                                                zone.assignedTo.status === 'PENDING' ? 'warning' : 'default'
+                                                        }
+                                                        className="text-xs"
+                                                    >
+                                                        {zone.assignedTo.status}
+                                                    </Badge>
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-3 border-2 border-dashed border-secondary-200 rounded-lg">
+                                                    <AlertCircle className="h-4 w-4 text-secondary-400 mx-auto mb-1" />
+                                                    <p className="text-xs text-secondary-500">Unassigned Zone</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         ) : (
                             <div className="text-center py-8">
@@ -628,6 +735,336 @@ export default function DocumentDetail() {
                     </div>
                 </div>
             </div>
+        </div>
+    );
+}
+
+// PDF Viewer with Signature Zones Component
+interface PDFViewerWithZonesProps {
+    document: any;
+    numPages: number | null;
+    currentPage: number;
+    scale: number;
+    onDocumentLoadSuccess: (data: { numPages: number }) => void;
+    onPageChange: (page: number) => void;
+    onScaleChange: (scale: number) => void;
+}
+
+function PDFViewerWithZones({
+    document,
+    numPages,
+    currentPage,
+    scale,
+    onDocumentLoadSuccess,
+    onPageChange,
+    onScaleChange,
+}: PDFViewerWithZonesProps) {
+    const [hoveredZone, setHoveredZone] = useState<string | null>(null);
+    const [canvasDimensions, setCanvasDimensions] = useState<{ width: number; height: number } | null>(null);
+    const pdfContainerRef = useRef<HTMLDivElement | null>(null);
+
+    // Update canvas dimensions when PDF loads or scale changes
+    useEffect(() => {
+        const updateCanvasDimensions = () => {
+            if (!pdfContainerRef.current) return;
+
+            // Find canvas within our container
+            const canvas = pdfContainerRef.current.querySelector('.react-pdf__Page canvas') as HTMLCanvasElement;
+            if (canvas) {
+                setCanvasDimensions({
+                    width: canvas.offsetWidth,
+                    height: canvas.offsetHeight
+                });
+                console.log('Canvas dimensions updated:', canvas.offsetWidth, canvas.offsetHeight);
+            } else {
+                console.log('Canvas not found in container');
+            }
+        };
+
+        // Update dimensions after a short delay to ensure PDF is rendered
+        const timer = setTimeout(updateCanvasDimensions, 300);
+
+        // Also update on window resize
+        const handleResize = () => updateCanvasDimensions();
+        window.addEventListener('resize', handleResize);
+
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener('resize', handleResize);
+        };
+    }, [currentPage, scale, numPages]);
+
+    const onDocumentLoadError = (error: Error) => {
+        console.error('Error loading PDF:', error);
+    };
+
+    // Get signature zones for current page
+    const currentPageZones = document.signatureZones?.filter(
+        (zone: any) => zone.pageNumber === currentPage
+    ) || [];
+
+    // Assign colors to signers
+    const getSignerColor = (signerId: string) => {
+        if (!document.signingSteps) return SIGNER_COLORS[0];
+
+        let signerIndex = 0;
+        for (const step of document.signingSteps) {
+            for (const signer of step.signers || []) {
+                if (signer.id === signerId) {
+                    return SIGNER_COLORS[signerIndex % SIGNER_COLORS.length];
+                }
+                signerIndex++;
+            }
+        }
+        return SIGNER_COLORS[0];
+    };
+
+    console.log(canvasDimensions, currentPageZones)
+
+    return (
+        <div className="space-y-4">
+            {/* PDF Controls */}
+            <div className="flex items-center justify-between p-3 bg-secondary-50 rounded-lg">
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+                        disabled={currentPage <= 1}
+                    >
+                        <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm font-medium">
+                        Page {currentPage} of {numPages || '-'}
+                    </span>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onPageChange(Math.min(numPages || 1, currentPage + 1))}
+                        disabled={currentPage >= (numPages || 1)}
+                    >
+                        <ChevronRight className="h-4 w-4" />
+                    </Button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onScaleChange(Math.max(0.5, scale - 0.1))}
+                        disabled={scale <= 0.5}
+                    >
+                        <ZoomOut className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm font-medium w-16 text-center">
+                        {Math.round(scale * 100)}%
+                    </span>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onScaleChange(Math.min(2.0, scale + 0.1))}
+                        disabled={scale >= 2.0}
+                    >
+                        <ZoomIn className="h-4 w-4" />
+                    </Button>
+                </div>
+            </div>
+
+            {/* PDF Viewer with Zones */}
+            <div className="relative bg-secondary-100 rounded-lg overflow-hidden">
+                <div className="flex justify-center p-4">
+                    <div ref={pdfContainerRef} className="relative">
+                        <Document
+                            file={document.originalFileUrl}
+                            onLoadSuccess={(pdf) => {
+                                onDocumentLoadSuccess(pdf);
+                                // Trigger canvas dimensions update after PDF loads
+                                setTimeout(() => {
+                                    if (pdfContainerRef.current) {
+                                        const canvas = pdfContainerRef.current.querySelector('.react-pdf__Page canvas') as HTMLCanvasElement;
+                                        if (canvas) {
+                                            setCanvasDimensions({
+                                                width: canvas.offsetWidth,
+                                                height: canvas.offsetHeight
+                                            });
+                                            console.log('Canvas dimensions set in onLoadSuccess:', canvas.offsetWidth, canvas.offsetHeight);
+                                        } else {
+                                            console.log('Canvas not found in onLoadSuccess');
+                                        }
+                                    }
+                                }, 300);
+                            }}
+                            onLoadError={onDocumentLoadError}
+                            loading={
+                                <div className="flex items-center justify-center h-96 w-full">
+                                    <div className="text-center">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+                                        <p className="text-sm text-secondary-600 mt-2">Loading PDF...</p>
+                                    </div>
+                                </div>
+                            }
+                            error={
+                                <div className="flex items-center justify-center h-96 w-full">
+                                    <div className="text-center">
+                                        <XCircle className="h-12 w-12 text-red-400 mx-auto mb-2" />
+                                        <p className="text-sm text-red-600">Failed to load PDF document</p>
+                                        <p className="text-xs text-secondary-500 mt-1">Please check if the document URL is accessible</p>
+                                    </div>
+                                </div>
+                            }
+                        >
+                            <Page
+                                pageNumber={currentPage}
+                                scale={scale}
+                                renderTextLayer={false}
+                                renderAnnotationLayer={false}
+                                onLoadSuccess={() => {
+                                    // Update canvas dimensions when page loads
+                                    setTimeout(() => {
+                                        if (pdfContainerRef.current) {
+                                            const canvas = pdfContainerRef.current.querySelector('.react-pdf__Page canvas') as HTMLCanvasElement;
+                                            if (canvas) {
+                                                setCanvasDimensions({
+                                                    width: canvas.offsetWidth,
+                                                    height: canvas.offsetHeight
+                                                });
+                                                console.log('Canvas dimensions set in Page onLoadSuccess:', canvas.offsetWidth, canvas.offsetHeight);
+                                            } else {
+                                                console.log('Canvas not found in Page onLoadSuccess');
+                                            }
+                                        }
+                                    }, 150);
+                                }}
+                            />
+                        </Document>
+
+                        {/* Loading Indicator for Zones */}
+                        {!canvasDimensions && currentPageZones.length > 0 && (
+                            <div className="absolute top-2 right-2 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-md">
+                                Loading signature zones...
+                            </div>
+                        )}
+
+                        {/* No Zones Indicator */}
+                        {canvasDimensions && currentPageZones.length === 0 && (
+                            <div className="absolute top-2 right-2 bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-md">
+                                No signature zones on this page
+                            </div>
+                        )}
+
+                        {/* Signature Zones Overlay */}
+                        {canvasDimensions && currentPageZones.map((zone: any, index: number) => {
+                            const canvasWidth = canvasDimensions.width;
+                            const canvasHeight = canvasDimensions.height;
+
+                            // Convert zone coordinates based on their format
+                            // Assume zones are in PDF coordinate system (points) and need to be scaled to canvas
+                            const pdfToCanvasRatio = scale; // Since canvas is scaled by the same ratio
+
+                            const x = zone.x * pdfToCanvasRatio;
+                            const y = zone.y * pdfToCanvasRatio;
+                            const width = zone.width * pdfToCanvasRatio;
+                            const height = zone.height * pdfToCanvasRatio;
+
+                            const assignedSigner = zone.assignedTo;
+                            const signerColor = assignedSigner ? getSignerColor(assignedSigner.id) : '#6b7280';
+
+                            return (
+                                <div
+                                    key={zone.id}
+                                    className={cn(
+                                        "absolute border-2 transition-all duration-200 cursor-pointer",
+                                        hoveredZone === zone.id
+                                            ? "border-solid shadow-lg z-20"
+                                            : "border-dashed border-opacity-60 z-10",
+                                        assignedSigner?.status === 'SIGNED'
+                                            ? "bg-green-500 bg-opacity-20 border-green-500"
+                                            : "bg-opacity-10"
+                                    )}
+                                    style={{
+                                        left: x,
+                                        top: y,
+                                        width: width,
+                                        height: height,
+                                        borderColor: signerColor,
+                                        backgroundColor: `${signerColor}20`,
+                                    }}
+                                    onMouseEnter={() => setHoveredZone(zone.id)}
+                                    onMouseLeave={() => setHoveredZone(null)}
+                                >
+                                    {/* Zone Label */}
+                                    <div
+                                        className="absolute -top-7 left-0 px-2 py-1 rounded text-xs font-medium text-white whitespace-nowrap"
+                                        style={{ backgroundColor: signerColor }}
+                                    >
+                                        {assignedSigner ? (
+                                            <>
+                                                {assignedSigner.user.fullName || assignedSigner.user.email}
+                                                {assignedSigner.status === 'SIGNED' && ' ✓'}
+                                            </>
+                                        ) : (
+                                            zone.label || `Zone ${index + 1}`
+                                        )}
+                                    </div>
+
+                                    {/* Zone Status Icon */}
+                                    {assignedSigner?.status === 'SIGNED' && (
+                                        <div className="absolute top-1 right-1">
+                                            <CheckCircle className="h-4 w-4 text-green-600 bg-white rounded-full" />
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* Zone Legend */}
+            {currentPageZones.length > 0 && (
+                <div className="p-3 bg-secondary-50 rounded-lg">
+                    <h4 className="text-sm font-medium text-secondary-900 mb-2">
+                        Signature Zones on Page {currentPage} ({currentPageZones.length})
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {currentPageZones.map((zone: any, index: number) => {
+                            const assignedSigner = zone.assignedTo;
+                            const signerColor = assignedSigner ? getSignerColor(assignedSigner.id) : '#6b7280';
+
+                            return (
+                                <div
+                                    key={zone.id}
+                                    className={cn(
+                                        "flex items-center gap-2 p-2 rounded border transition-colors",
+                                        hoveredZone === zone.id ? "bg-white border-primary-300" : "bg-white border-secondary-200"
+                                    )}
+                                    onMouseEnter={() => setHoveredZone(zone.id)}
+                                    onMouseLeave={() => setHoveredZone(null)}
+                                >
+                                    <div
+                                        className="w-3 h-3 rounded border-2"
+                                        style={{
+                                            borderColor: signerColor,
+                                            backgroundColor: `${signerColor}40`
+                                        }}
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-medium text-secondary-900 truncate">
+                                            {assignedSigner?.user.fullName || assignedSigner?.user.email || `Zone ${index + 1}`}
+                                        </p>
+                                        <p className="text-xs text-secondary-500">
+                                            {zone.label || 'No label'} • {assignedSigner?.status || 'Unassigned'}
+                                        </p>
+                                    </div>
+                                    {assignedSigner?.status === 'SIGNED' && (
+                                        <CheckCircle className="h-4 w-4 text-green-600" />
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

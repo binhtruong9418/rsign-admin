@@ -10,59 +10,97 @@ import {
     Users,
     FileText,
     Clock,
+    RotateCcw,
+    CheckSquare,
+    Calendar,
+    ChevronDown,
+    ChevronUp,
 } from 'lucide-react';
 import { cn, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
-import { documentsAPI } from '@/lib/api';
-import type { DocumentFilters } from '@/types';
-import { Input, Select, Pagination, PaginationInfo } from '@/components/ui';
+import { documentsAPI, usersAPI } from '@/lib/api';
+import type { EnhancedDocumentFilters } from '@/types';
+import { Input, Select, Pagination, PaginationInfo, Button, Card } from '@/components/ui';
 
 export default function DocumentList() {
-    const [searchParams, setSearchParams] = useSearchParams();
-    const [filters, setFilters] = useState<DocumentFilters>({
+    const [searchParams] = useSearchParams();
+    
+    // Separate applied filters from draft filters
+    const [appliedFilters, setAppliedFilters] = useState<EnhancedDocumentFilters>({
         status: searchParams.get('status') as any || undefined,
         signingMode: searchParams.get('signingMode') as any || undefined,
         search: searchParams.get('search') || '',
+        batchId: searchParams.get('batchId') || undefined,
     });
+    
+    const [draftFilters, setDraftFilters] = useState<EnhancedDocumentFilters>({...appliedFilters});
+    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+    
     const [currentPage, setCurrentPage] = useState(
         parseInt(searchParams.get('page') || '1')
     );
     const [pageSize] = useState(10);
 
-    // Fetch documents using React Query
+    // Fetch users for creator filter
+    const { data: usersData } = useQuery({
+        queryKey: ['users-list'],
+        queryFn: () => usersAPI.getUsers({ limit: 100 }),
+    });
+
+    // Fetch documents using applied filters only
     const { data: documentsResponse, isLoading, error } = useQuery({
-        queryKey: ['documents', currentPage, pageSize, filters],
+        queryKey: ['documents', currentPage, pageSize, appliedFilters],
         queryFn: () => documentsAPI.getDocuments({
             page: currentPage - 1, // Convert to 0-based for API
             limit: pageSize,
-            search: filters.search || undefined,
-            status: filters.status || undefined,
-            signingMode: filters.signingMode || undefined,
+            ...appliedFilters,
         }),
     });
 
     const documents = documentsResponse?.items || [];
     const totalPages = documentsResponse?.totalPages || 0;
 
-    const handleFilterChange = (newFilters: Partial<DocumentFilters>) => {
-        const updatedFilters = { ...filters, ...newFilters };
-        setFilters(updatedFilters);
-        setCurrentPage(1); // Reset to first page when filtering
+    // Handle filter input changes (doesn't apply immediately)
+    const handleFilterChange = (newFilters: Partial<EnhancedDocumentFilters>) => {
+        setDraftFilters(prev => ({ ...prev, ...newFilters }));
+    };
 
-        // Update URL params
-        const params = new URLSearchParams();
-        Object.entries(updatedFilters).forEach(([key, value]) => {
-            if (value) params.set(key, value);
-        });
-        params.set('page', '1');
-        setSearchParams(params);
+    // Apply filters and reset to first page
+    const applyFilters = () => {
+        setAppliedFilters({ ...draftFilters });
+        setCurrentPage(1);
+    };
+
+    // Reset all filters
+    const resetFilters = () => {
+        const emptyFilters: EnhancedDocumentFilters = {
+            search: '',
+            status: undefined,
+            signingMode: undefined,
+            signingFlow: undefined,
+            batchId: undefined,
+            createdById: undefined,
+            assignedUserId: undefined,
+            dateFrom: undefined,
+            dateTo: undefined,
+            hasDeadline: undefined,
+            isTemplate: undefined,
+        };
+        setDraftFilters(emptyFilters);
+        setAppliedFilters(emptyFilters);
+        setCurrentPage(1);
     };
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page);
-        const params = new URLSearchParams(searchParams);
-        params.set('page', page.toString());
-        setSearchParams(params);
     };
+
+    // Check if filters have changes
+    const hasFilterChanges = JSON.stringify(draftFilters) !== JSON.stringify(appliedFilters);
+
+    // Count active filters
+    const activeFiltersCount = Object.values(appliedFilters).filter(value => 
+        value !== undefined && value !== '' && value !== null
+    ).length;
 
     if (isLoading) {
         return <DocumentListSkeleton />;
@@ -100,56 +138,245 @@ export default function DocumentList() {
             </div>
 
             {/* Filters */}
-            <div className="card p-6">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    {/* Search */}
-                    <div className="relative">
-                        <Input
-                            placeholder="Search documents..."
-                            value={filters.search}
-                            onChange={(e) => handleFilterChange({ search: e.target.value })}
-                            className="pl-10"
+            <Card className="p-6">
+                <div className="space-y-4">
+                    {/* Basic Filters Row */}
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        {/* Search */}
+                        <div className="relative">
+                            <Input
+                                placeholder="Search documents..."
+                                value={draftFilters.search || ''}
+                                onChange={(e) => handleFilterChange({ search: e.target.value })}
+                                className="pl-10"
+                            />
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-secondary-400 pointer-events-none" />
+                        </div>
+
+                        {/* Status Filter */}
+                        <Select
+                            placeholder="All Statuses"
+                            value={draftFilters.status || ''}
+                            onChange={(e) => handleFilterChange({ status: e.target.value as any || undefined })}
+                            options={[
+                                { value: '', label: 'All Statuses' },
+                                { value: 'DRAFT', label: 'Draft' },
+                                { value: 'PENDING', label: 'Pending' },
+                                { value: 'IN_PROGRESS', label: 'In Progress' },
+                                { value: 'COMPLETED', label: 'Completed' },
+                                { value: 'CANCELLED', label: 'Cancelled' },
+                            ]}
                         />
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-secondary-400 pointer-events-none" />
+
+                        {/* Signing Mode Filter */}
+                        <Select
+                            placeholder="All Modes"
+                            value={draftFilters.signingMode || ''}
+                            onChange={(e) => handleFilterChange({ signingMode: e.target.value as any || undefined })}
+                            options={[
+                                { value: '', label: 'All Modes' },
+                                { value: 'INDIVIDUAL', label: 'Individual' },
+                                { value: 'SHARED', label: 'Shared' },
+                            ]}
+                        />
+
+                        {/* Advanced Filters Toggle */}
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                            className="inline-flex items-center justify-center"
+                        >
+                            <Filter className="h-4 w-4 mr-2" />
+                            Advanced
+                            {showAdvancedFilters ? (
+                                <ChevronUp className="h-4 w-4 ml-2" />
+                            ) : (
+                                <ChevronDown className="h-4 w-4 ml-2" />
+                            )}
+                        </Button>
+
+                        {/* Filter Actions */}
+                        <div className="flex gap-2">
+                            <Button
+                                onClick={applyFilters}
+                                disabled={!hasFilterChanges}
+                                className="inline-flex items-center"
+                            >
+                                <CheckSquare className="h-4 w-4 mr-2" />
+                                Apply
+                                {activeFiltersCount > 0 && (
+                                    <span className="ml-2 bg-white/20 rounded-full px-2 py-0.5 text-xs">
+                                        {activeFiltersCount}
+                                    </span>
+                                )}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={resetFilters}
+                                disabled={activeFiltersCount === 0}
+                                className="inline-flex items-center"
+                            >
+                                <RotateCcw className="h-4 w-4 mr-2" />
+                                Reset
+                            </Button>
+                        </div>
                     </div>
 
-                    {/* Status Filter */}
-                    <Select
-                        placeholder="All Statuses"
-                        value={filters.status || ''}
-                        onChange={(e) => handleFilterChange({ status: e.target.value as any || undefined })}
-                        options={[
-                            { value: '', label: 'All Statuses' },
-                            { value: 'draft', label: 'Draft' },
-                            { value: 'pending', label: 'Pending' },
-                            { value: 'in-progress', label: 'In Progress' },
-                            { value: 'completed', label: 'Completed' },
-                            { value: 'cancelled', label: 'Cancelled' },
-                        ]}
-                    />
+                    {/* Advanced Filters */}
+                    {showAdvancedFilters && (
+                        <div className="border-t border-secondary-200 pt-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                {/* Signing Flow */}
+                                <div>
+                                    <label className="block text-sm font-medium text-secondary-700 mb-1">
+                                        Signing Flow
+                                    </label>
+                                    <Select
+                                        value={draftFilters.signingFlow || ''}
+                                        onChange={(e) => handleFilterChange({ signingFlow: e.target.value as any || undefined })}
+                                        options={[
+                                            { value: '', label: 'All Flows' },
+                                            { value: 'PARALLEL', label: 'Parallel' },
+                                            { value: 'SEQUENTIAL', label: 'Sequential' },
+                                        ]}
+                                    />
+                                </div>
 
-                    {/* Signing Mode Filter */}
-                    <Select
-                        placeholder="All Modes"
-                        value={filters.signingMode || ''}
-                        onChange={(e) => handleFilterChange({ signingMode: e.target.value as any || undefined })}
-                        options={[
-                            { value: '', label: 'All Modes' },
-                            { value: 'INDIVIDUAL', label: 'Individual' },
-                            { value: 'SHARED', label: 'Shared' },
-                        ]}
-                    />
+                                {/* Creator */}
+                                <div>
+                                    <label className="block text-sm font-medium text-secondary-700 mb-1">
+                                        Created By
+                                    </label>
+                                    <Select
+                                        value={draftFilters.createdById || ''}
+                                        onChange={(e) => handleFilterChange({ createdById: e.target.value || undefined })}
+                                        options={[
+                                            { value: '', label: 'All Creators' },
+                                            ...(usersData?.items || []).map(user => ({
+                                                value: user.id,
+                                                label: user.fullName || user.email
+                                            }))
+                                        ]}
+                                    />
+                                </div>
 
-                    {/* Filter Button */}
-                    <button className="btn-secondary inline-flex items-center justify-center">
-                        <Filter className="h-4 w-4 mr-2" />
-                        More Filters
-                    </button>
+                                {/* Batch ID */}
+                                <div>
+                                    <label className="block text-sm font-medium text-secondary-700 mb-1">
+                                        Batch ID
+                                    </label>
+                                    <Input
+                                        placeholder="Enter batch ID..."
+                                        value={draftFilters.batchId || ''}
+                                        onChange={(e) => handleFilterChange({ batchId: e.target.value || undefined })}
+                                    />
+                                </div>
+
+                                {/* Has Deadline */}
+                                <div>
+                                    <label className="block text-sm font-medium text-secondary-700 mb-1">
+                                        Deadline Status
+                                    </label>
+                                    <Select
+                                        value={draftFilters.hasDeadline === undefined ? '' : draftFilters.hasDeadline.toString()}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            handleFilterChange({ 
+                                                hasDeadline: value === '' ? undefined : value === 'true' 
+                                            });
+                                        }}
+                                        options={[
+                                            { value: '', label: 'All Documents' },
+                                            { value: 'true', label: 'With Deadline' },
+                                            { value: 'false', label: 'No Deadline' },
+                                        ]}
+                                    />
+                                </div>
+
+                                {/* Date From */}
+                                <div>
+                                    <label className="block text-sm font-medium text-secondary-700 mb-1">
+                                        Created From
+                                    </label>
+                                    <Input
+                                        type="date"
+                                        value={draftFilters.dateFrom || ''}
+                                        onChange={(e) => handleFilterChange({ dateFrom: e.target.value || undefined })}
+                                    />
+                                </div>
+
+                                {/* Date To */}
+                                <div>
+                                    <label className="block text-sm font-medium text-secondary-700 mb-1">
+                                        Created To
+                                    </label>
+                                    <Input
+                                        type="date"
+                                        value={draftFilters.dateTo || ''}
+                                        onChange={(e) => handleFilterChange({ dateTo: e.target.value || undefined })}
+                                    />
+                                </div>
+
+                                {/* Is Template */}
+                                <div>
+                                    <label className="block text-sm font-medium text-secondary-700 mb-1">
+                                        Document Type
+                                    </label>
+                                    <Select
+                                        value={draftFilters.isTemplate === undefined ? '' : draftFilters.isTemplate.toString()}
+                                        onChange={(e) => {
+                                            const value = e.target.value;
+                                            handleFilterChange({ 
+                                                isTemplate: value === '' ? undefined : value === 'true' 
+                                            });
+                                        }}
+                                        options={[
+                                            { value: '', label: 'All Types' },
+                                            { value: 'true', label: 'Templates Only' },
+                                            { value: 'false', label: 'Regular Documents' },
+                                        ]}
+                                    />
+                                </div>
+
+                                {/* Assigned User */}
+                                <div>
+                                    <label className="block text-sm font-medium text-secondary-700 mb-1">
+                                        Assigned To
+                                    </label>
+                                    <Select
+                                        value={draftFilters.assignedUserId || ''}
+                                        onChange={(e) => handleFilterChange({ assignedUserId: e.target.value || undefined })}
+                                        options={[
+                                            { value: '', label: 'All Assignees' },
+                                            ...(usersData?.items || []).map(user => ({
+                                                value: user.id,
+                                                label: user.fullName || user.email
+                                            }))
+                                        ]}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
-            </div>
+            </Card>
 
             {/* Documents Table */}
-            <div className="card overflow-hidden">
+            <Card className="overflow-hidden">
+                {/* Results Summary */}
+                <div className="px-6 py-4 bg-secondary-50 border-b border-secondary-200">
+                    <div className="flex items-center justify-between">
+                        <div className="text-sm text-secondary-600">
+                            Showing {documents.length} of {documentsResponse?.total || 0} documents
+                            {activeFiltersCount > 0 && (
+                                <span className="ml-2 text-primary-600">
+                                    ({activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} applied)
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-secondary-200">
                         <thead className="bg-secondary-50">
@@ -161,7 +388,10 @@ export default function DocumentList() {
                                     Status
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
-                                    Mode
+                                    Mode/Flow
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                                    Progress
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
                                     Created
@@ -184,9 +414,19 @@ export default function DocumentList() {
                                             <div className="ml-4">
                                                 <div className="text-sm font-medium text-secondary-900">
                                                     {document.title}
+                                                    {document.isTemplate && (
+                                                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                                            Template
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div className="text-sm text-secondary-500">
-                                                    Created by {document.createdBy?.email}
+                                                    Created by {document.createdBy?.fullName || document.createdBy?.email}
+                                                    {document.batchId && (
+                                                        <span className="ml-2 text-xs text-blue-600">
+                                                            Batch: {document.batchId.slice(0, 8)}...
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -198,6 +438,12 @@ export default function DocumentList() {
                                         )}>
                                             {getStatusLabel(document.status)}
                                         </span>
+                                        {document.deadline && (
+                                            <div className="text-xs text-secondary-500 mt-1 flex items-center">
+                                                <Calendar className="h-3 w-3 mr-1" />
+                                                Due: {formatDate(document.deadline)}
+                                            </div>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
@@ -206,16 +452,39 @@ export default function DocumentList() {
                                             ) : (
                                                 <Clock className="h-4 w-4 text-secondary-400 mr-2" />
                                             )}
-                                            <span className="text-sm text-secondary-600">
-                                                {document.signingMode}
-                                            </span>
+                                            <div>
+                                                <div className="text-sm text-secondary-900">
+                                                    {document.signingMode}
+                                                </div>
+                                                <div className="text-xs text-secondary-500">
+                                                    {document.signingFlow}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm text-secondary-900">
+                                            Step {document.currentStep || 1} of {document.totalSteps || 1}
+                                        </div>
+                                        <div className="w-16 bg-gray-200 rounded-full h-2 mt-1">
+                                            <div 
+                                                className="bg-blue-600 h-2 rounded-full" 
+                                                style={{ 
+                                                    width: `${((document.currentStep || 1) / (document.totalSteps || 1)) * 100}%` 
+                                                }}
+                                            ></div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-500">
-                                        {formatDate(document.createdAt)}
+                                        <div>{formatDate(document.createdAt)}</div>
+                                        {document.assignedUser && (
+                                            <div className="text-xs text-secondary-400 mt-1">
+                                                Assigned to: {document.assignedUser.fullName || document.assignedUser.email}
+                                            </div>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <div className="flex items-center space-x-3">
+                                        <div className="flex items-center justify-end space-x-3">
                                             <Link
                                                 to={`/admin/documents/${document.id}`}
                                                 className="text-primary-600 hover:text-primary-900"
@@ -232,6 +501,29 @@ export default function DocumentList() {
                         </tbody>
                     </table>
                 </div>
+
+                {/* No Results */}
+                {documents.length === 0 && !isLoading && (
+                    <div className="text-center py-12">
+                        <FileText className="mx-auto h-12 w-12 text-secondary-400" />
+                        <h3 className="mt-2 text-sm font-medium text-secondary-900">No documents found</h3>
+                        <p className="mt-1 text-sm text-secondary-500">
+                            {activeFiltersCount > 0 
+                                ? "Try adjusting your filters or search terms."
+                                : "Create your first document to get started."
+                            }
+                        </p>
+                        {activeFiltersCount > 0 && (
+                            <Button
+                                variant="outline"
+                                onClick={resetFilters}
+                                className="mt-4"
+                            >
+                                Clear all filters
+                            </Button>
+                        )}
+                    </div>
+                )}
 
                 {/* Pagination */}
                 {totalPages > 1 && (
@@ -251,7 +543,7 @@ export default function DocumentList() {
                         </div>
                     </div>
                 )}
-            </div>
+            </Card>
         </div>
     );
 }
