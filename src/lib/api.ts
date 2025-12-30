@@ -344,3 +344,91 @@ export const documentBatchAPI = {
         return response.data;
     },
 };
+
+// Template Management API
+export const templatesAPI = {
+    // List all templates with pagination
+    getTemplates: async (params: {
+        page?: number;
+        limit?: number;
+    }): Promise<PaginationResponse<Document>> => {
+        const response = await api.get("/admin/templates", { params });
+        return response.data;
+    },
+
+    // Get template details (uses document endpoint since templates are documents)
+    getTemplate: async (templateId: string): Promise<Document> => {
+        const response = await api.get(`/admin/documents/${templateId}`);
+        return response.data;
+    },
+
+    // Create document from template
+    createFromTemplate: async (
+        templateId: string,
+        data: {
+            title: string;
+            deadline?: string;
+            signingSteps: Array<{
+                stepOrder: number;
+                signers: Array<{
+                    userId: string;
+                    zoneIndex: number;
+                }>;
+            }>;
+            recipients?: {
+                userIds?: string[];
+                signerGroupId?: string;
+            };
+        }
+    ): Promise<{ success: true; document: Document }> => {
+        const response = await api.post(
+            `/admin/documents/from-template/${templateId}`,
+            data
+        );
+        return response.data;
+    },
+
+    // Update template
+    updateTemplate: async (
+        templateId: string,
+        data: {
+            title?: string;
+            templateName?: string;
+            signatureZones?: Array<{
+                pageNumber: number;
+                x: number;
+                y: number;
+                width: number;
+                height: number;
+                label?: string;
+            }>;
+            signingSteps?: Array<{
+                stepOrder: number;
+                totalSigners: number;
+            }>;
+        }
+    ): Promise<{
+        success: true;
+        template: {
+            id: string;
+            title: string;
+            templateName: string;
+            isTemplate: boolean;
+        };
+    }> => {
+        const response = await api.put(`/admin/templates/${templateId}`, data);
+        return response.data;
+    },
+
+    // Delete template
+    deleteTemplate: async (
+        templateId: string
+    ): Promise<{
+        success: true;
+        message: string;
+        affectedDocuments: number;
+    }> => {
+        const response = await api.delete(`/admin/templates/${templateId}`);
+        return response.data;
+    },
+};

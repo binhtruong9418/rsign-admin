@@ -10,6 +10,8 @@ import DocumentDetail from '@/pages/admin/DocumentDetail';
 import DocumentBatches from '@/pages/admin/DocumentBatches';
 import SignerGroups from '@/pages/admin/SignerGroups';
 import UserManagement from '@/pages/admin/UserManagement';
+import TemplateList from '@/pages/admin/TemplateList';
+import TemplateUse from '@/pages/admin/TemplateUse';
 
 function App() {
   return (
@@ -32,6 +34,8 @@ function App() {
                     <Route path="documents/:id" element={<DocumentDetail />} />
                     <Route path="documents/batch/:batchId" element={<DocumentList />} />
                     <Route path="document-batches" element={<DocumentBatches />} />
+                    <Route path="templates" element={<TemplateList />} />
+                    <Route path="templates/:templateId/use" element={<TemplateUse />} />
                     <Route path="users" element={<UserManagement />} />
                     <Route path="signer-groups" element={<SignerGroups />} />
                     <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />

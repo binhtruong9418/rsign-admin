@@ -14,6 +14,7 @@ import {
     Plus,
     Bell,
     Folder,
+    Layers,
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -23,6 +24,7 @@ interface AdminLayoutProps {
 const navigation = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Documents', href: '/admin/documents', icon: FileText },
+    { name: 'Templates', href: '/admin/templates', icon: Layers },
     { name: 'Document Batches', href: '/admin/document-batches', icon: Folder },
     { name: 'Users', href: '/admin/users', icon: Users },
     { name: 'Signer Groups', href: '/admin/signer-groups', icon: Users },
