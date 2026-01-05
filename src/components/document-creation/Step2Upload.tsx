@@ -17,7 +17,6 @@ interface Step2UploadProps {
 export function Step2Upload({ documentData, updateDocumentData, onNext, onPrevious }: Step2UploadProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState(0);
 
     const handleFileSelect = useCallback(async (file: File) => {
         if (file.type !== 'application/pdf') {
@@ -45,48 +44,41 @@ export function Step2Upload({ documentData, updateDocumentData, onNext, onPrevio
         }
 
         setIsUploading(true);
-        setUploadProgress(0);
 
-        try {
-            toast('Preparing upload...', { icon: '📤' });
+        const uploadPromise = (async () => {
             const uploadResponse = await documentsAPI.uploadDocument({
-                fileName: documentData.file.name,
+                fileName: documentData.file!.name,
                 purpose: 'DOCUMENT'
             });
 
-            toast('Uploading document...', { icon: '☁️' });
-
-            const progressInterval = setInterval(() => {
-                setUploadProgress(prev => {
-                    if (prev >= 90) {
-                        clearInterval(progressInterval);
-                        return 90;
-                    }
-                    return prev + 15;
-                });
-            }, 300);
-
             await documentsAPI.uploadFileToPresignedUrl(
                 uploadResponse.presignedUrl,
-                documentData.file
+                documentData.file!
             );
-
-            clearInterval(progressInterval);
-            setUploadProgress(100);
 
             updateDocumentData({
                 fileUrl: uploadResponse.fileUrl
             });
 
-            toast.success('Document uploaded successfully!');
-            setTimeout(() => onNext(), 500);
+            return uploadResponse;
+        })();
 
+        toast.promise(
+            uploadPromise,
+            {
+                loading: 'Uploading document...',
+                success: 'Document uploaded successfully!',
+                error: (err) => err?.error || 'Failed to upload document'
+            }
+        );
+
+        try {
+            await uploadPromise;
+            onNext();
         } catch (error: any) {
             console.error('Upload error:', error);
-            toast.error(error.error || 'Failed to upload document');
         } finally {
             setIsUploading(false);
-            setUploadProgress(0);
         }
     }, [documentData.file, documentData.title, updateDocumentData, onNext]);
 
@@ -180,26 +172,6 @@ export function Step2Upload({ documentData, updateDocumentData, onNext, onPrevio
                                     Remove
                                 </Button>
                             </div>
-                        </div>
-                    </Card>
-                )}
-
-                {isUploading && (
-                    <Card className="p-4 mt-4">
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                                <span>Uploading: {documentData.file?.name}</span>
-                                <span>{uploadProgress}%</span>
-                            </div>
-                            <div className="w-full bg-secondary-200 rounded-full h-2">
-                                <div
-                                    className="bg-primary-600 h-2 rounded-full transition-all duration-300"
-                                    style={{ width: `${uploadProgress}%` }}
-                                />
-                            </div>
-                            <p className="text-xs text-secondary-500">
-                                Estimated time: {Math.max(1, Math.ceil((100 - uploadProgress) / 10))} seconds
-                            </p>
                         </div>
                     </Card>
                 )}

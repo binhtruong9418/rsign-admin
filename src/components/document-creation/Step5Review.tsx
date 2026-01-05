@@ -18,8 +18,6 @@ interface Step5ReviewProps {
 
 export function Step5Review({ documentData, updateDocumentData, onPrevious }: Step5ReviewProps) {
     const [isSending, setIsSending] = useState(false);
-    const [showProgress, setShowProgress] = useState(false);
-    const [progress, setProgress] = useState(0);
     const [isComplete, setIsComplete] = useState(false);
     const [batchId, setBatchId] = useState<string>('');
     const navigate = useNavigate();
@@ -29,31 +27,13 @@ export function Step5Review({ documentData, updateDocumentData, onPrevious }: St
         : documentData.signers.length;
 
     const handleSend = async () => {
-        try {
-            setIsSending(true);
-            setShowProgress(true);
-            setProgress(0);
+        setIsSending(true);
 
-            // Build API request
+        const createPromise = (async () => {
             const request = buildCreateDocumentRequest(documentData);
             console.log('Creating document with request:', request);
 
-            // Simulate progress
-            const progressInterval = setInterval(() => {
-                setProgress(prev => {
-                    if (prev >= 90) {
-                        clearInterval(progressInterval);
-                        return 90;
-                    }
-                    return prev + 10;
-                });
-            }, 300);
-
-            // Make API call
             const response = await documentsAPI.createDocument(request);
-
-            clearInterval(progressInterval);
-            setProgress(100);
 
             // Handle response based on document type
             if (response.batchId) {
@@ -63,13 +43,24 @@ export function Step5Review({ documentData, updateDocumentData, onPrevious }: St
             } else {
                 setBatchId('doc-' + Date.now());
             }
-            setIsComplete(true);
+            
+            return response;
+        })();
 
-            toast.success('Documents created successfully!');
+        toast.promise(
+            createPromise,
+            {
+                loading: 'Creating documents...',
+                success: `Document${documentData.type === 'INDIVIDUAL' ? 's' : ''} created successfully!`,
+                error: (err) => err?.error || err?.message || 'Failed to create documents'
+            }
+        );
+
+        try {
+            await createPromise;
+            setIsComplete(true);
         } catch (error: any) {
             console.error('Failed to create document:', error);
-            toast.error(error.error || error.message || 'Failed to create documents');
-            setShowProgress(false);
         } finally {
             setIsSending(false);
         }
@@ -378,68 +369,46 @@ export function Step5Review({ documentData, updateDocumentData, onPrevious }: St
                 </div>
             </Card>
 
-            {/* Progress Modal */}
-            {showProgress && (
+            {/* Success Modal */}
+            {isComplete && (
                 <Modal
                     isOpen={true}
-                    onClose={() => { }}
-                    title={isComplete ? "✅ Success!" : "Creating Documents..."}
+                    onClose={() => setIsComplete(false)}
+                    title="✅ Success!"
                 >
-                    <div className="space-y-4">
-                        {!isComplete ? (
-                            <>
-                                <div className="w-full bg-secondary-200 rounded-full h-2">
-                                    <div
-                                        className="bg-primary-600 h-2 rounded-full transition-all duration-300"
-                                        style={{ width: `${progress}%` }}
-                                    />
-                                </div>
-                                <div className="text-center">
-                                    <p className="text-sm text-secondary-600">
-                                        {progress}% Complete
-                                    </p>
-                                    <p className="text-xs text-secondary-500 mt-1">
-                                        Estimated time: {Math.max(1, Math.ceil((100 - progress) / 10))} seconds
-                                    </p>
-                                    <p className="text-sm text-secondary-600 mt-2">Please wait...</p>
-                                </div>
-                            </>
-                        ) : (
-                            <div className="text-center space-y-4">
-                                <div className="text-center">
-                                    <p className="text-lg font-medium text-green-600 mb-2">Documents Created Successfully!</p>
-                                    <div className="space-y-1 text-sm text-secondary-600">
-                                        <p>{recipientCount} document{recipientCount > 1 ? 's' : ''} created</p>
-                                        <p>{recipientCount} email{recipientCount > 1 ? 's' : ''} sent</p>
-                                    </div>
-                                    {batchId && (
-                                        <p className="text-sm text-secondary-500 mt-2">
-                                            Batch ID: {batchId}
-                                        </p>
-                                    )}
-                                </div>
-
-                                <div className="flex justify-center gap-3">
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => navigate('/admin/documents')}
-                                    >
-                                        View Documents
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => window.location.reload()}
-                                    >
-                                        Create More
-                                    </Button>
-                                    <Button
-                                        onClick={() => navigate('/admin')}
-                                    >
-                                        Go to Dashboard
-                                    </Button>
-                                </div>
+                    <div className="text-center space-y-4">
+                        <div className="text-center">
+                            <p className="text-lg font-medium text-green-600 mb-2">Documents Created Successfully!</p>
+                            <div className="space-y-1 text-sm text-secondary-600">
+                                <p>{recipientCount} document{recipientCount > 1 ? 's' : ''} created</p>
+                                <p>{recipientCount} email{recipientCount > 1 ? 's' : ''} sent</p>
                             </div>
-                        )}
+                            {batchId && (
+                                <p className="text-sm text-secondary-500 mt-2">
+                                    Batch ID: {batchId}
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="flex justify-center gap-3">
+                            <Button
+                                variant="outline"
+                                onClick={() => navigate('/admin/documents')}
+                            >
+                                View Documents
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => window.location.reload()}
+                            >
+                                Create More
+                            </Button>
+                            <Button
+                                onClick={() => navigate('/admin')}
+                            >
+                                Go to Dashboard
+                            </Button>
+                        </div>
                     </div>
                 </Modal>
             )}
