@@ -90,7 +90,8 @@ export type CreateDocumentRequest = APICreateDocumentRequest;
 
 // Helper to build API request from DocumentData
 export function buildCreateDocumentRequest(
-  data: DocumentData
+  data: DocumentData,
+  sendImmediately?: boolean
 ): CreateDocumentRequest {
   if (!data.type || !data.fileUrl) {
     throw new Error("Document type and file URL are required");
@@ -117,6 +118,7 @@ export function buildCreateDocumentRequest(
     signingSteps: [],
     saveAsTemplate: data.saveAsTemplate,
     templateName: data.saveAsTemplate ? data.templateName : undefined,
+    sendImmediately: sendImmediately,
   };
 
   if (data.type === "INDIVIDUAL") {

@@ -11,11 +11,22 @@ export default defineConfig({
         },
     },
     optimizeDeps: {
-        include: ['pdfjs-dist']
+        include: ["pdfjs-dist"],
+        exclude: ["pdfjs-dist/build/pdf.worker.min.mjs"],
+    },
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    pdfjs: ["pdfjs-dist"],
+                    "react-pdf": ["react-pdf"],
+                },
+            },
+        },
     },
     server: {
         fs: {
-            allow: ['..']
-        }
-    }
+            allow: [".."],
+        },
+    },
 });

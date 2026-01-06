@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { ArrowLeft, ArrowRight, FileText, X, Eye, Square, Settings, ZoomIn, ZoomOut, Check, Trash2 } from 'lucide-react';
-import { Document, Page, pdfjs } from 'react-pdf';
+import { Document, Page } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import { Button } from '@/components/ui/Button';
@@ -11,12 +11,7 @@ import { Select } from '@/components/ui/Select';
 import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import type { DocumentData, SignatureZone, Signer } from '@/types/document-creation';
-
-// Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
-    import.meta.url,
-).toString();
+import { PDF_OPTIONS } from '@/lib/pdf-worker';
 
 interface Step4ZonesProps {
     documentData: DocumentData;
@@ -45,6 +40,8 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
     const [scale, setScale] = useState(1.0);
     const [dragMode, setDragMode] = useState(false);
     const [showSizeControls, setShowSizeControls] = useState(false);
+    const [isLoadingPdf, setIsLoadingPdf] = useState(true);
+    const [isLoadingPage, setIsLoadingPage] = useState(false);
 
     // Store actual PDF page dimensions (in points/pixels) - independent of zoom/scale
     // Key is page number, value is { width, height } in PDF points
@@ -70,10 +67,20 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
         }
     }, [activeSigners, selectedSignerId]);
 
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            // Cleanup to prevent memory leaks
+            setIsDrawing(false);
+            setSelectedZones([]);
+        };
+    }, []);
+
     const currentZones = documentData.signatureZones.filter(zone => zone.page === currentPage);
 
     const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
         setNumPages(numPages);
+        setIsLoadingPdf(false);
     };
 
     const onDocumentLoadError = (error: Error) => {
@@ -101,6 +108,8 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
             newMap.set(currentPage, { width, height });
             return newMap;
         });
+
+        setIsLoadingPage(false);
     }, [currentPage]);
 
     // Sync pageDimensions to documentData whenever it changes
@@ -510,19 +519,26 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
                             <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                disabled={currentPage === 1}
+                                onClick={() => {
+                                    setIsLoadingPage(true);
+                                    setCurrentPage(prev => Math.max(1, prev - 1));
+                                }}
+                                disabled={currentPage === 1 || isLoadingPage}
                             >
                                 ◀
                             </Button>
                             <span className="text-sm text-secondary-600">
                                 Page {currentPage} of {numPages || '?'}
+                                {isLoadingPage && <span className="ml-2 text-xs text-primary-600">Loading...</span>}
                             </span>
                             <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setCurrentPage(prev => Math.min(numPages || 1, prev + 1))}
-                                disabled={currentPage === numPages}
+                                onClick={() => {
+                                    setIsLoadingPage(true);
+                                    setCurrentPage(prev => Math.min(numPages || 1, prev + 1));
+                                }}
+                                disabled={currentPage === numPages || isLoadingPage}
                             >
                                 ▶
                             </Button>
@@ -572,232 +588,244 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
                                     className="relative inline-block"
                                 >
                                     <Document
-                                    file={documentData.fileUrl}
-                                    onLoadSuccess={onDocumentLoadSuccess}
-                                    onLoadError={onDocumentLoadError}
-                                    loading={
-                                        <div className="flex items-center justify-center h-96">
-                                            <div className="text-center">
-                                                <FileText className="h-16 w-16 mx-auto mb-4 text-secondary-400" />
-                                                <p className="text-secondary-600">Loading PDF...</p>
+                                        file={documentData.fileUrl}
+                                        onLoadSuccess={onDocumentLoadSuccess}
+                                        onLoadError={onDocumentLoadError}
+                                        options={PDF_OPTIONS}
+                                        loading={
+                                            <div className="flex items-center justify-center h-96">
+                                                <div className="text-center">
+                                                    <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-primary-600 border-r-transparent mb-4"></div>
+                                                    <p className="text-secondary-600 font-medium">Loading PDF...</p>
+                                                    <p className="text-xs text-secondary-500 mt-2">This may take a few seconds</p>
+                                                </div>
                                             </div>
-                                        </div>
-                                    }
-                                    error={
-                                        <div className="flex items-center justify-center h-96">
-                                            <div className="text-center">
-                                                <X className="h-16 w-16 mx-auto mb-4 text-red-400" />
-                                                <p className="text-red-600">Failed to load PDF</p>
+                                        }
+                                        error={
+                                            <div className="flex items-center justify-center h-96">
+                                                <div className="text-center">
+                                                    <X className="h-16 w-16 mx-auto mb-4 text-red-400" />
+                                                    <p className="text-red-600 font-medium">Failed to load PDF</p>
+                                                    <p className="text-xs text-secondary-500 mt-2">Please check the file and try again</p>
+                                                </div>
                                             </div>
-                                        </div>
-                                    }
-                                >
-                                    <Page
-                                        pageNumber={currentPage}
-                                        scale={scale}
-                                        renderTextLayer={false}
-                                        renderAnnotationLayer={false}
-                                        onLoadSuccess={onPageLoadSuccess}
-                                    />
-                                </Document>
-
-                                {/* Drawing Overlay */}
-                                {dragMode && (
-                                    <div
-                                        className="absolute z-10"
-                                        onMouseDown={handleDrawingStart}
-                                        onMouseMove={handleDrawingMove}
-                                        onMouseUp={handleDrawingEnd}
-                                        style={{
-                                            cursor: 'crosshair',
-                                            top: 0,
-                                            left: 0,
-                                            right: 0,
-                                            bottom: 0
-                                        }}
-                                    />
-                                )}
-
-                                {/* Current Drawing Rectangle */}
-                                {isDrawing && currentDrawing && (
-                                    <div
-                                        className="absolute border-2 border-dashed border-blue-500 bg-blue-500/10 pointer-events-none z-20"
-                                        style={{
-                                            left: currentDrawing.x,
-                                            top: currentDrawing.y,
-                                            width: currentDrawing.width,
-                                            height: currentDrawing.height,
-                                        }}
+                                        }
                                     >
-                                        <div className="absolute top-1 left-1 bg-blue-500 text-white text-xs px-2 py-1 rounded">
-                                            {Math.round(currentDrawing.width)} × {Math.round(currentDrawing.height)}
-                                        </div>
-                                    </div>
-                                )}
+                                        <Page
+                                            pageNumber={currentPage}
+                                            scale={scale}
+                                            renderTextLayer={false}
+                                            renderAnnotationLayer={false}
+                                            renderMode="canvas"
+                                            onLoadSuccess={onPageLoadSuccess}
+                                            loading={
+                                                <div className="flex items-center justify-center" style={{ height: '500px', width: '100%' }}>
+                                                    <div className="text-center">
+                                                        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary-600 border-r-transparent mb-2"></div>
+                                                        <p className="text-sm text-secondary-600">Loading page {currentPage}...</p>
+                                                    </div>
+                                                </div>
+                                            }
+                                        />
+                                    </Document>
 
-                                {/* Signature Zones */}
-                                {currentZones.map(zone => {
-                                    const signer = getSignerById(zone.signerId);
-                                    if (!signer) return null;
-
-                                    // Get canvas element to calculate display positions
-                                    const pdfContainer = pdfViewerRef.current;
-                                    const canvas = pdfContainer?.querySelector('canvas');
-                                    if (!canvas) return null;
-
-                                    const canvasWidth = canvas.offsetWidth;
-                                    const canvasHeight = canvas.offsetHeight;
-
-                                    // Convert PDF page percentages (0-100) to canvas pixels for display
-                                    // Zone coordinates are stored as percentages of PDF page dimensions (0-100)
-                                    // Canvas displays PDF proportionally, so we can use canvas size directly
-                                    // Divide by 100 to convert to 0-1 range, then multiply by canvas size
-                                    const pixelX = (zone.x / 100) * canvasWidth;
-                                    const pixelY = (zone.y / 100) * canvasHeight;
-                                    const pixelWidth = (zone.width / 100) * canvasWidth;
-                                    const pixelHeight = (zone.height / 100) * canvasHeight;
-
-                                    return (
+                                    {/* Drawing Overlay */}
+                                    {dragMode && (
                                         <div
-                                            key={zone.id}
-                                            className="absolute cursor-move"
+                                            className="absolute z-10"
+                                            onMouseDown={handleDrawingStart}
+                                            onMouseMove={handleDrawingMove}
+                                            onMouseUp={handleDrawingEnd}
                                             style={{
-                                                left: `${pixelX}px`,
-                                                top: `${pixelY}px`,
-                                                width: `${pixelWidth}px`,
-                                                height: `${pixelHeight}px`,
+                                                cursor: 'crosshair',
+                                                top: 0,
+                                                left: 0,
+                                                right: 0,
+                                                bottom: 0
                                             }}
-                                            onMouseDown={(e) => {
-                                                if (dragMode) return; // Don't allow drag during draw mode
-                                                e.stopPropagation();
+                                        />
+                                    )}
 
-                                                const startX = e.clientX;
-                                                const startY = e.clientY;
-                                                const startLeft = pixelX;
-                                                const startTop = pixelY;
-
-                                                const handleMouseMove = (moveEvent: MouseEvent) => {
-                                                    const deltaX = moveEvent.clientX - startX;
-                                                    const deltaY = moveEvent.clientY - startY;
-
-                                                    const newX = Math.max(0, Math.min(startLeft + deltaX, canvasWidth - pixelWidth));
-                                                    const newY = Math.max(0, Math.min(startTop + deltaY, canvasHeight - pixelHeight));
-
-                                                    // Convert canvas pixels back to PDF page percentages (0-100)
-                                                    updateZone(zone.id, {
-                                                        x: (newX / canvasWidth) * 100,
-                                                        y: (newY / canvasHeight) * 100,
-                                                    });
-                                                };
-
-                                                const handleMouseUp = () => {
-                                                    document.removeEventListener('mousemove', handleMouseMove);
-                                                    document.removeEventListener('mouseup', handleMouseUp);
-                                                };
-
-                                                document.addEventListener('mousemove', handleMouseMove);
-                                                document.addEventListener('mouseup', handleMouseUp);
+                                    {/* Current Drawing Rectangle */}
+                                    {isDrawing && currentDrawing && (
+                                        <div
+                                            className="absolute border-2 border-dashed border-blue-500 bg-blue-500/10 pointer-events-none z-20"
+                                            style={{
+                                                left: currentDrawing.x,
+                                                top: currentDrawing.y,
+                                                width: currentDrawing.width,
+                                                height: currentDrawing.height,
                                             }}
                                         >
-                                            <div
-                                                className={cn(
-                                                    'border-2 border-dashed bg-opacity-20 flex items-center justify-center text-xs font-medium relative group transition-all cursor-pointer w-full h-full',
-                                                    selectedZones.includes(zone.id) ? 'ring-2 ring-blue-400 shadow-lg' : ''
-                                                )}
-                                                style={{
-                                                    borderColor: signer.color,
-                                                    backgroundColor: selectedZones.includes(zone.id)
-                                                        ? signer.color + '50'
-                                                        : signer.color + '33',
-                                                    color: signer.color
-                                                }}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    selectZone(zone.id, e.ctrlKey || e.metaKey);
-                                                }}
-                                                onDoubleClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setEditingZone(zone);
-                                                }}
-                                            >
-                                                <span className="pointer-events-none text-center px-1">
-                                                    {zone.label || signer.name}
-                                                </span>
-
-                                                {/* Selection Indicator */}
-                                                {selectedZones.includes(zone.id) && (
-                                                    <div className="absolute -top-2 -left-2 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
-                                                        <Check className="w-2 h-2 text-white" />
-                                                    </div>
-                                                )}
-
-                                                {/* Zone Controls */}
-                                                <div className="absolute -top-8 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded shadow-lg border flex">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setEditingZone(zone);
-                                                        }}
-                                                        className="h-6 w-6 p-0"
-                                                    >
-                                                        <Eye className="h-3 w-3" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            removeZone(zone.id);
-                                                        }}
-                                                        className="h-6 w-6 p-0 text-red-600"
-                                                    >
-                                                        <X className="h-3 w-3" />
-                                                    </Button>
-                                                </div>
-
-                                                {/* Resize Handles */}
-                                                <div
-                                                    className="absolute -bottom-2 -right-2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full cursor-se-resize"
-                                                    onMouseDown={(e) => {
-                                                        e.stopPropagation();
-                                                        if (dragMode) return;
-
-                                                        const startX = e.clientX;
-                                                        const startY = e.clientY;
-                                                        const startWidth = pixelWidth;
-                                                        const startHeight = pixelHeight;
-
-                                                        const handleMouseMove = (moveEvent: MouseEvent) => {
-                                                            const deltaX = moveEvent.clientX - startX;
-                                                            const deltaY = moveEvent.clientY - startY;
-
-                                                            const newWidth = Math.max(50, Math.min(startWidth + deltaX, canvasWidth - pixelX));
-                                                            const newHeight = Math.max(20, Math.min(startHeight + deltaY, canvasHeight - pixelY));
-
-                                                            // Convert canvas pixels back to PDF page percentages (0-100)
-                                                            updateZone(zone.id, {
-                                                                width: (newWidth / canvasWidth) * 100,
-                                                                height: (newHeight / canvasHeight) * 100,
-                                                            });
-                                                        };
-
-                                                        const handleMouseUp = () => {
-                                                            document.removeEventListener('mousemove', handleMouseMove);
-                                                            document.removeEventListener('mouseup', handleMouseUp);
-                                                        };
-
-                                                        document.addEventListener('mousemove', handleMouseMove);
-                                                        document.addEventListener('mouseup', handleMouseUp);
-                                                    }}
-                                                />
+                                            <div className="absolute top-1 left-1 bg-blue-500 text-white text-xs px-2 py-1 rounded">
+                                                {Math.round(currentDrawing.width)} × {Math.round(currentDrawing.height)}
                                             </div>
                                         </div>
-                                    );
-                                })}
+                                    )}
+
+                                    {/* Signature Zones */}
+                                    {currentZones.map(zone => {
+                                        const signer = getSignerById(zone.signerId);
+                                        if (!signer) return null;
+
+                                        // Get canvas element to calculate display positions
+                                        const pdfContainer = pdfViewerRef.current;
+                                        const canvas = pdfContainer?.querySelector('canvas');
+                                        if (!canvas) return null;
+
+                                        const canvasWidth = canvas.offsetWidth;
+                                        const canvasHeight = canvas.offsetHeight;
+
+                                        // Convert PDF page percentages (0-100) to canvas pixels for display
+                                        // Zone coordinates are stored as percentages of PDF page dimensions (0-100)
+                                        // Canvas displays PDF proportionally, so we can use canvas size directly
+                                        // Divide by 100 to convert to 0-1 range, then multiply by canvas size
+                                        const pixelX = (zone.x / 100) * canvasWidth;
+                                        const pixelY = (zone.y / 100) * canvasHeight;
+                                        const pixelWidth = (zone.width / 100) * canvasWidth;
+                                        const pixelHeight = (zone.height / 100) * canvasHeight;
+
+                                        return (
+                                            <div
+                                                key={zone.id}
+                                                className="absolute cursor-move"
+                                                style={{
+                                                    left: `${pixelX}px`,
+                                                    top: `${pixelY}px`,
+                                                    width: `${pixelWidth}px`,
+                                                    height: `${pixelHeight}px`,
+                                                }}
+                                                onMouseDown={(e) => {
+                                                    if (dragMode) return; // Don't allow drag during draw mode
+                                                    e.stopPropagation();
+
+                                                    const startX = e.clientX;
+                                                    const startY = e.clientY;
+                                                    const startLeft = pixelX;
+                                                    const startTop = pixelY;
+
+                                                    const handleMouseMove = (moveEvent: MouseEvent) => {
+                                                        const deltaX = moveEvent.clientX - startX;
+                                                        const deltaY = moveEvent.clientY - startY;
+
+                                                        const newX = Math.max(0, Math.min(startLeft + deltaX, canvasWidth - pixelWidth));
+                                                        const newY = Math.max(0, Math.min(startTop + deltaY, canvasHeight - pixelHeight));
+
+                                                        // Convert canvas pixels back to PDF page percentages (0-100)
+                                                        updateZone(zone.id, {
+                                                            x: (newX / canvasWidth) * 100,
+                                                            y: (newY / canvasHeight) * 100,
+                                                        });
+                                                    };
+
+                                                    const handleMouseUp = () => {
+                                                        document.removeEventListener('mousemove', handleMouseMove);
+                                                        document.removeEventListener('mouseup', handleMouseUp);
+                                                    };
+
+                                                    document.addEventListener('mousemove', handleMouseMove);
+                                                    document.addEventListener('mouseup', handleMouseUp);
+                                                }}
+                                            >
+                                                <div
+                                                    className={cn(
+                                                        'border-2 border-dashed bg-opacity-20 flex items-center justify-center text-xs font-medium relative group transition-all cursor-pointer w-full h-full',
+                                                        selectedZones.includes(zone.id) ? 'ring-2 ring-blue-400 shadow-lg' : ''
+                                                    )}
+                                                    style={{
+                                                        borderColor: signer.color,
+                                                        backgroundColor: selectedZones.includes(zone.id)
+                                                            ? signer.color + '50'
+                                                            : signer.color + '33',
+                                                        color: signer.color
+                                                    }}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        selectZone(zone.id, e.ctrlKey || e.metaKey);
+                                                    }}
+                                                    onDoubleClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEditingZone(zone);
+                                                    }}
+                                                >
+                                                    <span className="pointer-events-none text-center px-1">
+                                                        {zone.label || signer.name}
+                                                    </span>
+
+                                                    {/* Selection Indicator */}
+                                                    {selectedZones.includes(zone.id) && (
+                                                        <div className="absolute -top-2 -left-2 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
+                                                            <Check className="w-2 h-2 text-white" />
+                                                        </div>
+                                                    )}
+
+                                                    {/* Zone Controls */}
+                                                    <div className="absolute -top-8 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded shadow-lg border flex">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setEditingZone(zone);
+                                                            }}
+                                                            className="h-6 w-6 p-0"
+                                                        >
+                                                            <Eye className="h-3 w-3" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                removeZone(zone.id);
+                                                            }}
+                                                            className="h-6 w-6 p-0 text-red-600"
+                                                        >
+                                                            <X className="h-3 w-3" />
+                                                        </Button>
+                                                    </div>
+
+                                                    {/* Resize Handles */}
+                                                    <div
+                                                        className="absolute -bottom-2 -right-2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full cursor-se-resize"
+                                                        onMouseDown={(e) => {
+                                                            e.stopPropagation();
+                                                            if (dragMode) return;
+
+                                                            const startX = e.clientX;
+                                                            const startY = e.clientY;
+                                                            const startWidth = pixelWidth;
+                                                            const startHeight = pixelHeight;
+
+                                                            const handleMouseMove = (moveEvent: MouseEvent) => {
+                                                                const deltaX = moveEvent.clientX - startX;
+                                                                const deltaY = moveEvent.clientY - startY;
+
+                                                                const newWidth = Math.max(50, Math.min(startWidth + deltaX, canvasWidth - pixelX));
+                                                                const newHeight = Math.max(20, Math.min(startHeight + deltaY, canvasHeight - pixelY));
+
+                                                                // Convert canvas pixels back to PDF page percentages (0-100)
+                                                                updateZone(zone.id, {
+                                                                    width: (newWidth / canvasWidth) * 100,
+                                                                    height: (newHeight / canvasHeight) * 100,
+                                                                });
+                                                            };
+
+                                                            const handleMouseUp = () => {
+                                                                document.removeEventListener('mousemove', handleMouseMove);
+                                                                document.removeEventListener('mouseup', handleMouseUp);
+                                                            };
+
+                                                            document.addEventListener('mousemove', handleMouseMove);
+                                                            document.addEventListener('mouseup', handleMouseUp);
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
-                        </div>
                         ) : (
                             <div className="flex items-center justify-center h-full">
                                 <div className="text-center">
@@ -861,7 +889,7 @@ export function Step4Zones({ documentData, updateDocumentData, onNext, onPreviou
             {editingZone && (() => {
                 // Zone coordinates are already in 0-100 percentage format
                 // No need to convert from page dimensions
-                
+
                 return (
                     <Modal
                         isOpen={true}

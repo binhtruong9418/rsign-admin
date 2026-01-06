@@ -228,6 +228,7 @@ export interface CreateDocumentRequest {
     };
     saveAsTemplate?: boolean;
     templateName?: string;
+    sendImmediately?: boolean;
 }
 
 export interface SignDocumentRequest {

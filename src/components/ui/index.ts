@@ -43,3 +43,5 @@ export type {
 
 export { Textarea } from "./Textarea";
 export type { TextareaProps } from "./Textarea";
+
+export { PDFErrorBoundary } from "./PDFErrorBoundary";
