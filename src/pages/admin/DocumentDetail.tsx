@@ -194,7 +194,17 @@ export default function DocumentDetailNew() {
 
             {/* Tab Content */}
             <div>
-                {activeTab === 'overview' && <OverviewTab document={document} files={files} progress={progress} timeline={timeline} signers={signers} steps={steps} />}
+                {activeTab === 'overview' && (
+                    <OverviewTab
+                        document={document}
+                        files={files}
+                        progress={progress}
+                        timeline={timeline}
+                        signers={signers}
+                        steps={steps}
+                        zones={zones}
+                    />
+                )}
                 {activeTab === 'signatures' && <SignaturesTab zones={zones} />}
                 {activeTab === 'timeline' && <TimelineTab timeline={timeline} document={document} />}
                 {activeTab === 'audit' && <AuditTrailTab activities={activities} />}
@@ -204,14 +214,20 @@ export default function DocumentDetailNew() {
 }
 
 // Overview Tab Component
-function OverviewTab({ document, files, progress, timeline, signers, steps }: any) {
+function OverviewTab({ document, files, progress, timeline, signers, steps, zones }: any) {
     const [numPages, setNumPages] = useState<number | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [scale, setScale] = useState(1.0);
+    const [showSignatureZones, setShowSignatureZones] = useState(false);
 
     const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
         setNumPages(numPages);
     };
+
+    const previewFile = files.signed || files.original;
+    const isSignedPreview = Boolean(files.signed);
+    const hasZones = (zones || []).length > 0;
+    const pageZones = (zones || []).filter((zone: any) => zone.page === currentPage && zone.position);
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -262,24 +278,57 @@ function OverviewTab({ document, files, progress, timeline, signers, steps }: an
                                     >
                                         <ZoomIn className="h-4 w-4" />
                                     </Button>
+                                    <Button
+                                        variant={showSignatureZones ? 'primary' : 'outline'}
+                                        size="sm"
+                                        onClick={() => setShowSignatureZones(prev => !prev)}
+                                        disabled={!hasZones}
+                                    >
+                                        <Eye className="h-4 w-4 mr-2" />
+                                        {showSignatureZones ? 'Hide Zones' : 'Show Zones'}
+                                    </Button>
                                 </div>
                             </div>
 
                             {/* PDF Document */}
                             <div className="border border-secondary-200 rounded-lg overflow-auto max-h-[600px] bg-secondary-50">
-                                <Document
-                                    file={files.original}
-                                    onLoadSuccess={onDocumentLoadSuccess}
-                                    loading={<div className="p-8 text-center text-secondary-600">Loading PDF...</div>}
-                                    error={<div className="p-8 text-center text-red-600">Failed to load PDF</div>}
-                                >
-                                    <Page
-                                        pageNumber={currentPage}
-                                        scale={scale}
-                                        renderTextLayer={true}
-                                        renderAnnotationLayer={false}
-                                    />
-                                </Document>
+                                <div className="flex justify-center p-4">
+                                    <div className="relative inline-block">
+                                        <Document
+                                            file={previewFile}
+                                            onLoadSuccess={onDocumentLoadSuccess}
+                                            loading={<div className="p-8 text-center text-secondary-600">Loading PDF...</div>}
+                                            error={<div className="p-8 text-center text-red-600">Failed to load PDF</div>}
+                                        >
+                                            <Page
+                                                pageNumber={currentPage}
+                                                scale={scale}
+                                                renderTextLayer={true}
+                                                renderAnnotationLayer={false}
+                                            />
+                                        </Document>
+
+                                        {showSignatureZones && pageZones.map((zone: any) => (
+                                            <div
+                                                key={zone.id}
+                                                className={cn(
+                                                    "absolute border-2 border-dashed border-primary-500 pointer-events-none",
+                                                    isSignedPreview ? "bg-primary-500/5" : "bg-primary-500/10"
+                                                )}
+                                                style={{
+                                                    left: `${zone.position.x}%`,
+                                                    top: `${zone.position.y}%`,
+                                                    width: `${zone.position.w}%`,
+                                                    height: `${zone.position.h}%`,
+                                                }}
+                                            >
+                                                <div className="absolute left-0 top-0 bg-primary-600 text-white text-[10px] px-1 py-0.5 rounded-br">
+                                                    {zone.label || zone.signer?.user?.fullName || 'Signature'}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
