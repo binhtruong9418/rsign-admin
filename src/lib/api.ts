@@ -21,6 +21,7 @@ import type {
     DocumentBatchFilters,
     EnhancedDocumentFilters,
     BatchSendResponse,
+    AdminDocumentDetail,
 } from "@/types"; // Create axios instance with base configuration
 import { JWT_STORAGE_KEY, USER_STORAGE_KEY } from "@/lib/constant";
 
@@ -122,7 +123,7 @@ export const documentsAPI = {
         return response.data;
     },
 
-    getDocument: async (id: string): Promise<Document> => {
+    getDocument: async (id: string): Promise<AdminDocumentDetail> => {
         const response = await api.get(`/admin/documents/${id}`);
         return response.data;
     },

@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { DocumentStatus } from '@/types';
+import { DocumentStatus } from "@/types";
 
 // Utility function for merging Tailwind classes
 export function cn(...inputs: ClassValue[]) {
@@ -55,9 +55,14 @@ export const getStatusColor = (status: DocumentStatus): string => {
     const colors = {
         [DocumentStatus.DRAFT]: "text-status-draft bg-status-draft/10",
         [DocumentStatus.PENDING]: "text-status-pending bg-status-pending/10",
-        [DocumentStatus.IN_PROGRESS]: "text-status-in-progress bg-status-in-progress/10",
-        [DocumentStatus.COMPLETED]: "text-status-completed bg-status-completed/10",
-        [DocumentStatus.CANCELLED]: "text-status-cancelled bg-status-cancelled/10",
+        [DocumentStatus.IN_PROGRESS]:
+            "text-status-in-progress bg-status-in-progress/10",
+        [DocumentStatus.COMPLETED]:
+            "text-status-completed bg-status-completed/10",
+        [DocumentStatus.CANCELLED]:
+            "text-status-cancelled bg-status-cancelled/10",
+        [DocumentStatus.REJECTED]: "text-red-700 bg-red-100",
+        [DocumentStatus.EXPIRED]: "text-orange-700 bg-orange-100",
     };
     return colors[status] || colors[DocumentStatus.DRAFT];
 };
@@ -69,6 +74,8 @@ export const getStatusLabel = (status: DocumentStatus): string => {
         [DocumentStatus.IN_PROGRESS]: "In Progress",
         [DocumentStatus.COMPLETED]: "Completed",
         [DocumentStatus.CANCELLED]: "Cancelled",
+        [DocumentStatus.REJECTED]: "Rejected",
+        [DocumentStatus.EXPIRED]: "Expired",
     };
     return labels[status] || "Unknown";
 };

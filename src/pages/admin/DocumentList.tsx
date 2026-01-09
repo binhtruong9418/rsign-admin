@@ -8,6 +8,7 @@ import {
     Eye,
     MoreVertical,
     Users,
+    User,
     FileText,
     Clock,
     RotateCcw,
@@ -23,7 +24,7 @@ import { Input, Select, Pagination, PaginationInfo, Button, Card } from '@/compo
 
 export default function DocumentList() {
     const [searchParams] = useSearchParams();
-    
+
     // Separate applied filters from draft filters
     const [appliedFilters, setAppliedFilters] = useState<EnhancedDocumentFilters>({
         status: searchParams.get('status') as any || undefined,
@@ -31,10 +32,10 @@ export default function DocumentList() {
         search: searchParams.get('search') || '',
         batchId: searchParams.get('batchId') || undefined,
     });
-    
-    const [draftFilters, setDraftFilters] = useState<EnhancedDocumentFilters>({...appliedFilters});
+
+    const [draftFilters, setDraftFilters] = useState<EnhancedDocumentFilters>({ ...appliedFilters });
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-    
+
     const [currentPage, setCurrentPage] = useState(
         parseInt(searchParams.get('page') || '1')
     );
@@ -98,7 +99,7 @@ export default function DocumentList() {
     const hasFilterChanges = JSON.stringify(draftFilters) !== JSON.stringify(appliedFilters);
 
     // Count active filters
-    const activeFiltersCount = Object.values(appliedFilters).filter(value => 
+    const activeFiltersCount = Object.values(appliedFilters).filter(value =>
         value !== undefined && value !== '' && value !== null
     ).length;
 
@@ -164,6 +165,8 @@ export default function DocumentList() {
                                 { value: 'PENDING', label: 'Pending' },
                                 { value: 'IN_PROGRESS', label: 'In Progress' },
                                 { value: 'COMPLETED', label: 'Completed' },
+                                { value: 'REJECTED', label: 'Rejected' },
+                                { value: 'EXPIRED', label: 'Expired' },
                                 { value: 'CANCELLED', label: 'Cancelled' },
                             ]}
                         />
@@ -177,6 +180,7 @@ export default function DocumentList() {
                                 { value: '', label: 'All Modes' },
                                 { value: 'INDIVIDUAL', label: 'Individual' },
                                 { value: 'SHARED', label: 'Shared' },
+                                { value: 'MULTI', label: 'Multi-Signature' },
                             ]}
                         />
 
@@ -281,8 +285,8 @@ export default function DocumentList() {
                                         value={draftFilters.hasDeadline === undefined ? '' : draftFilters.hasDeadline.toString()}
                                         onChange={(e) => {
                                             const value = e.target.value;
-                                            handleFilterChange({ 
-                                                hasDeadline: value === '' ? undefined : value === 'true' 
+                                            handleFilterChange({
+                                                hasDeadline: value === '' ? undefined : value === 'true'
                                             });
                                         }}
                                         options={[
@@ -326,8 +330,8 @@ export default function DocumentList() {
                                         value={draftFilters.isTemplate === undefined ? '' : draftFilters.isTemplate.toString()}
                                         onChange={(e) => {
                                             const value = e.target.value;
-                                            handleFilterChange({ 
-                                                isTemplate: value === '' ? undefined : value === 'true' 
+                                            handleFilterChange({
+                                                isTemplate: value === '' ? undefined : value === 'true'
                                             });
                                         }}
                                         options={[
@@ -421,9 +425,11 @@ export default function DocumentList() {
                                                     )}
                                                 </div>
                                                 <div className="text-sm text-secondary-500">
-                                                    Created by {document.createdBy?.fullName || document.createdBy?.email}
+                                                    {document.createdBy && (
+                                                        <>Created by {document.createdBy.fullName || document.createdBy.email}</>
+                                                    )}
                                                     {document.batchId && (
-                                                        <span className="ml-2 text-xs text-blue-600">
+                                                        <span className={cn("text-xs text-blue-600", document.createdBy && "ml-2")}>
                                                             Batch: {document.batchId.slice(0, 8)}...
                                                         </span>
                                                     )}
@@ -447,14 +453,14 @@ export default function DocumentList() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
-                                            {document.signingMode === 'SHARED' ? (
+                                            {document.signingMode === 'SHARED' || document.signingMode === 'MULTI' ? (
                                                 <Users className="h-4 w-4 text-secondary-400 mr-2" />
                                             ) : (
-                                                <Clock className="h-4 w-4 text-secondary-400 mr-2" />
+                                                <User className="h-4 w-4 text-secondary-400 mr-2" />
                                             )}
                                             <div>
                                                 <div className="text-sm text-secondary-900">
-                                                    {document.signingMode}
+                                                    {document.signingMode === 'MULTI' ? 'Multi' : document.signingMode}
                                                 </div>
                                                 <div className="text-xs text-secondary-500">
                                                     {document.signingFlow}
@@ -463,16 +469,21 @@ export default function DocumentList() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm text-secondary-900">
-                                            Step {document.currentStep || 1} of {document.totalSteps || 1}
-                                        </div>
-                                        <div className="w-16 bg-gray-200 rounded-full h-2 mt-1">
-                                            <div 
-                                                className="bg-blue-600 h-2 rounded-full" 
-                                                style={{ 
-                                                    width: `${((document.currentStep || 1) / (document.totalSteps || 1)) * 100}%` 
-                                                }}
-                                            ></div>
+                                        <div className="flex flex-col space-y-1">
+                                            <div className="text-sm text-secondary-900">
+                                                {document.completedSigners || 0}/{document.totalSigners || 0} Signed
+                                            </div>
+                                            <div className="w-24 bg-gray-200 rounded-full h-2">
+                                                <div
+                                                    className="bg-green-600 h-2 rounded-full transition-all"
+                                                    style={{
+                                                        width: `${document.totalSigners ? ((document.completedSigners || 0) / document.totalSigners) * 100 : 0}%`
+                                                    }}
+                                                ></div>
+                                            </div>
+                                            <div className="text-xs text-secondary-500">
+                                                Step {document.currentStep || 1}/{document.totalSteps || 1}
+                                            </div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-500">
@@ -508,7 +519,7 @@ export default function DocumentList() {
                         <FileText className="mx-auto h-12 w-12 text-secondary-400" />
                         <h3 className="mt-2 text-sm font-medium text-secondary-900">No documents found</h3>
                         <p className="mt-1 text-sm text-secondary-500">
-                            {activeFiltersCount > 0 
+                            {activeFiltersCount > 0
                                 ? "Try adjusting your filters or search terms."
                                 : "Create your first document to get started."
                             }

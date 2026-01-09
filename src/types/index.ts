@@ -18,7 +18,8 @@ export const AuthProvider = {
 
 export const SigningMode = {
     INDIVIDUAL: "INDIVIDUAL", // Each recipient gets their own document copy
-    SHARED: "SHARED", // All recipients sign the same document
+    SHARED: "SHARED", // All recipients sign the same document (legacy)
+    MULTI: "MULTI", // All recipients sign the same document (new API format)
 } as const;
 
 export const SigningFlow = {
@@ -32,6 +33,8 @@ export const DocumentStatus = {
     IN_PROGRESS: "IN_PROGRESS",
     COMPLETED: "COMPLETED",
     CANCELLED: "CANCELLED",
+    REJECTED: "REJECTED", // Document was rejected by a signer
+    EXPIRED: "EXPIRED", // Document deadline has passed
 } as const;
 
 export const SigningStepStatus = {
@@ -98,6 +101,7 @@ export interface Document extends BaseEntity {
     title: string;
     originalFileUrl: string;
     signedFileUrl?: string; // Available only after completion
+    contentHash?: string; // SHA-256 hash of document content
     status: DocumentStatus;
     signingMode: SigningMode;
     signingFlow: SigningFlow;
@@ -116,6 +120,10 @@ export interface Document extends BaseEntity {
     // Template fields
     isTemplate: boolean;
     templateName?: string;
+
+    // Progress tracking (for list views)
+    totalSigners?: number;
+    completedSigners?: number;
 }
 
 export interface SignatureZone extends BaseEntity {
@@ -127,14 +135,15 @@ export interface SignatureZone extends BaseEntity {
     label?: string;
 
     // Relationships
-    documentId: string;
-    assignedTo?: DocumentSigner;
+    documentId?: string;
+    assignedTo?: DocumentSigner | null;
 }
 
 export interface SigningStep extends BaseEntity {
     stepOrder: number;
     status: SigningStepStatus;
     totalSigners: number;
+    completedSigners: number;
 
     // Relationships
     documentId: string;
@@ -377,4 +386,142 @@ export interface BatchSendResponse {
         success: boolean;
         error?: string;
     }>;
+}
+
+// Admin Document Detail API - New nested structure
+export interface AdminDocumentDetail {
+    document: {
+        id: string;
+        title: string;
+        status: DocumentStatus;
+        mode: "INDIVIDUAL" | "SHARED" | "MULTI";
+        flow: "PARALLEL" | "SEQUENTIAL";
+        createdAt: string;
+        createdBy: {
+            id: string;
+            fullName: string;
+            email: string;
+        };
+        deadline: string | null;
+        completedAt: string | null;
+    };
+    files: {
+        original: string;
+        signed: string | null;
+        contentHash: string;
+    };
+    progress: {
+        current: number;
+        total: number;
+        signed: number;
+        declined: number;
+        pending: number;
+        percentage: number;
+    };
+    timeline: {
+        created: {
+            at: string;
+            by: {
+                id: string;
+                fullName: string;
+                email: string;
+            };
+        };
+        deadline?: string;
+        isOverdue?: boolean;
+        completed?: string;
+    };
+    signers: Array<{
+        id: string;
+        user: {
+            id: string;
+            fullName: string;
+            email: string;
+        };
+        status: DocumentSignerStatus;
+        signedAt: string | null;
+        stepOrder: number;
+        zoneId: string;
+    }>;
+    zones: Array<{
+        id: string;
+        page: number;
+        position: {
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+        };
+        label: string | null;
+        signer?: {
+            id: string;
+            user: {
+                id: string;
+                fullName: string;
+                email: string;
+            };
+            status: DocumentSignerStatus;
+            signedAt: string | null;
+            signature?: {
+                previewUrl: string;
+                hash: string;
+                playback: {
+                    strokes: Array<{
+                        points: Array<{ x: number; y: number }>;
+                    }>;
+                    color: string;
+                    width: number;
+                };
+            };
+            ip?: string;
+            device?: {
+                fingerprint: string;
+                userAgent: string;
+            };
+        };
+    }>;
+    steps: Array<{
+        order: number;
+        status: "WAITING" | "IN_PROGRESS" | "COMPLETED";
+        signers: Array<{
+            id: string;
+            user: {
+                id: string;
+                fullName: string;
+                email: string;
+            };
+            status: DocumentSignerStatus;
+            signedAt: string | null;
+            zoneId: string;
+        }>;
+    }>;
+    activities: Array<{
+        type:
+            | "DOCUMENT_CREATED"
+            | "DOCUMENT_SENT"
+            | "SESSION_CREATED"
+            | "SIGNATURE_APPLIED"
+            | "SIGNATURE_DECLINED"
+            | "STEP_COMPLETED"
+            | "DOCUMENT_COMPLETED"
+            | "DOCUMENT_VIEWED"
+            | "SESSION_EXPIRED";
+        time: string;
+        actor: {
+            id: string;
+            fullName: string;
+            email: string;
+        } | null;
+        description: string;
+        metadata: Record<string, any>;
+    }>;
+    batchId?: string;
+    assignedTo?: {
+        id: string;
+        fullName: string;
+        email: string;
+    };
+    template?: {
+        name: string;
+    };
 }
