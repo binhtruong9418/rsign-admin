@@ -22,6 +22,8 @@ import type {
     EnhancedDocumentFilters,
     BatchSendResponse,
     AdminDocumentDetail,
+    DashboardStatistics,
+    TimeSeriesData,
 } from "@/types"; // Create axios instance with base configuration
 import { JWT_STORAGE_KEY, USER_STORAGE_KEY } from "@/lib/constant";
 
@@ -430,6 +432,20 @@ export const templatesAPI = {
         affectedDocuments: number;
     }> => {
         const response = await api.delete(`/admin/templates/${templateId}`);
+        return response.data;
+    },
+};
+
+export const statisticsAPI = {
+    getDashboardStatistics: async (): Promise<DashboardStatistics> => {
+        const response = await api.get("/admin/statistics/dashboard");
+        return response.data;
+    },
+
+    getTimeSeries: async (days = 30): Promise<TimeSeriesData[]> => {
+        const response = await api.get("/admin/statistics/time-series", {
+            params: { days },
+        });
         return response.data;
     },
 };

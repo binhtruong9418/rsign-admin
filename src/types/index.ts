@@ -525,3 +525,5 @@ export interface AdminDocumentDetail {
         name: string;
     };
 }
+
+export * from "./admin-statistics";
