@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -9,10 +9,10 @@ import {
     CheckCircle,
     Clock,
     Send,
-    Eye,
     Filter,
     MoreVertical,
-    TrendingUp
+    TrendingUp,
+    Trash2,
 } from 'lucide-react';
 import { cn, formatDate, getStatusColor } from '@/lib/utils';
 import { documentBatchAPI } from '@/lib/api';
@@ -31,6 +31,7 @@ export default function DocumentBatches() {
     });
     const [currentPage, setCurrentPage] = useState(1);
     const navigate = useNavigate();
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
     // Fetch document batches
     const { data: batchesResponse, isLoading, error, refetch } = useQuery({
@@ -44,6 +45,15 @@ export default function DocumentBatches() {
     const batches = batchesResponse?.items || [];
     const totalPages = batchesResponse?.totalPages || 0;
     const totalBatches = batchesResponse?.total || 0;
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = () => setOpenMenuId(null);
+        if (openMenuId) {
+            document.addEventListener('click', handleClickOutside);
+            return () => document.removeEventListener('click', handleClickOutside);
+        }
+    }, [openMenuId]);
 
     const handleFilterChange = (newFilters: Partial<DocumentBatchFilters>) => {
         const updatedFilters = { ...filters, ...newFilters };
@@ -238,7 +248,11 @@ export default function DocumentBatches() {
                         </thead>
                         <tbody className="bg-white divide-y divide-secondary-200">
                             {batches.map((batch) => (
-                                <tr key={batch.batchId} className="hover:bg-secondary-50">
+                                <tr 
+                                    key={batch.batchId} 
+                                    className="hover:bg-secondary-50 cursor-pointer"
+                                    onClick={() => navigate(`/admin/documents?batchId=${batch.batchId}`)}
+                                >
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
                                             <Folder className="h-5 w-5 text-secondary-400 mr-3" />
@@ -274,23 +288,60 @@ export default function DocumentBatches() {
                                             by {batch.createdBy.fullName}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <div className="flex items-center gap-2">
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => navigate(`/admin/documents?batchId=${batch.batchId}`)}
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex items-center justify-end relative">
+                                            <button 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setOpenMenuId(openMenuId === batch.batchId ? null : batch.batchId);
+                                                }}
+                                                className="text-secondary-400 hover:text-secondary-600 p-1 rounded hover:bg-secondary-100"
                                             >
-                                                <Eye className="h-4 w-4" />
-                                            </Button>
-                                            {batch.status === 'DRAFT' && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleSendBatch(batch.batchId)}
-                                                >
-                                                    <Send className="h-4 w-4" />
-                                                </Button>
+                                                <MoreVertical className="h-4 w-4" />
+                                            </button>
+                                            {openMenuId === batch.batchId && (
+                                                <div className="absolute right-0 top-8 w-56 bg-white rounded-lg shadow-lg border border-secondary-200 py-1 z-10">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            navigate(`/admin/documents?batchId=${batch.batchId}`);
+                                                            setOpenMenuId(null);
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50 flex items-center"
+                                                    >
+                                                        <Folder className="h-4 w-4 mr-3" />
+                                                        View Documents
+                                                    </button>
+                                                    {batch.status === 'DRAFT' && (
+                                                        <>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleSendBatch(batch.batchId);
+                                                                    setOpenMenuId(null);
+                                                                }}
+                                                                className="w-full text-left px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50 flex items-center"
+                                                            >
+                                                                <Send className="h-4 w-4 mr-3" />
+                                                                Send Batch
+                                                            </button>
+                                                            <div className="border-t border-secondary-200 my-1"></div>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (confirm('Delete this batch?')) {
+                                                                        // TODO: Implement delete batch
+                                                                    }
+                                                                    setOpenMenuId(null);
+                                                                }}
+                                                                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
+                                                            >
+                                                                <Trash2 className="h-4 w-4 mr-3" />
+                                                                Delete Batch
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
                                     </td>

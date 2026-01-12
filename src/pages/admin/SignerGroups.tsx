@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Users, Search, Edit, Trash2, Eye } from 'lucide-react';
+import { Plus, Users, Search } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { signerGroupsAPI } from '@/lib/api';
 import { Input, Pagination, PaginationInfo } from '@/components/ui';
@@ -10,6 +11,7 @@ export default function SignerGroups() {
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize] = useState(10);
+    const navigate = useNavigate();
 
     // Fetch signer groups using React Query
     const { data: signerGroupsResponse, isLoading, error } = useQuery({
@@ -80,7 +82,11 @@ export default function SignerGroups() {
             {/* Groups Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredGroups.map((group) => (
-                    <div key={group.id} className="card-hover p-6">
+                    <div 
+                        key={group.id} 
+                        className="card-hover p-6 cursor-pointer"
+                        onClick={() => navigate(`/admin/signer-groups/${group.id}`)}
+                    >
                         <div className="flex items-start justify-between">
                             <div className="flex items-center">
                                 <div className="h-12 w-12 bg-primary-100 rounded-lg flex items-center justify-center">
@@ -90,17 +96,6 @@ export default function SignerGroups() {
                                     <h3 className="text-lg font-semibold text-secondary-900">{group.name}</h3>
                                     <p className="text-sm text-secondary-600 mt-1">{group.memberCount} members</p>
                                 </div>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <button className="p-2 text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 rounded">
-                                    <Eye className="h-4 w-4" />
-                                </button>
-                                <button className="p-2 text-secondary-400 hover:text-secondary-600 hover:bg-secondary-100 rounded">
-                                    <Edit className="h-4 w-4" />
-                                </button>
-                                <button className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded">
-                                    <Trash2 className="h-4 w-4" />
-                                </button>
                             </div>
                         </div>
 

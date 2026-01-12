@@ -1,11 +1,10 @@
-import { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
     Filter,
     Search,
     Plus,
-    Eye,
     MoreVertical,
     Users,
     User,
@@ -16,6 +15,9 @@ import {
     Calendar,
     ChevronDown,
     ChevronUp,
+    Send,
+    Trash2,
+    Download,
 } from 'lucide-react';
 import { cn, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
 import { documentsAPI, usersAPI } from '@/lib/api';
@@ -24,6 +26,7 @@ import { Input, Select, Pagination, PaginationInfo, Button, Card } from '@/compo
 
 export default function DocumentList() {
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
 
     // Separate applied filters from draft filters
     const [appliedFilters, setAppliedFilters] = useState<EnhancedDocumentFilters>({
@@ -40,6 +43,7 @@ export default function DocumentList() {
         parseInt(searchParams.get('page') || '1')
     );
     const [pageSize] = useState(10);
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
     // Fetch users for creator filter
     const { data: usersData } = useQuery({
@@ -59,6 +63,15 @@ export default function DocumentList() {
 
     const documents = documentsResponse?.items || [];
     const totalPages = documentsResponse?.totalPages || 0;
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = () => setOpenMenuId(null);
+        if (openMenuId) {
+            document.addEventListener('click', handleClickOutside);
+            return () => document.removeEventListener('click', handleClickOutside);
+        }
+    }, [openMenuId]);
 
     // Handle filter input changes (doesn't apply immediately)
     const handleFilterChange = (newFilters: Partial<EnhancedDocumentFilters>) => {
@@ -407,7 +420,11 @@ export default function DocumentList() {
                         </thead>
                         <tbody className="bg-white divide-y divide-secondary-200">
                             {documents.map((document) => (
-                                <tr key={document.id} className="hover:bg-secondary-50">
+                                <tr 
+                                    key={document.id} 
+                                    className="hover:bg-secondary-50 cursor-pointer" 
+                                    onClick={() => navigate(`/admin/documents/${document.id}`)}
+                                >
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
                                             <div className="flex-shrink-0 h-10 w-10">
@@ -494,17 +511,76 @@ export default function DocumentList() {
                                             </div>
                                         )}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <div className="flex items-center justify-end space-x-3">
-                                            <Link
-                                                to={`/admin/documents/${document.id}`}
-                                                className="text-primary-600 hover:text-primary-900"
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex items-center justify-end space-x-3 relative">
+                                            <button 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setOpenMenuId(openMenuId === document.id ? null : document.id);
+                                                }}
+                                                className="text-secondary-400 hover:text-secondary-600 p-1 rounded hover:bg-secondary-100"
                                             >
-                                                <Eye className="h-4 w-4" />
-                                            </Link>
-                                            <button className="text-secondary-400 hover:text-secondary-600">
                                                 <MoreVertical className="h-4 w-4" />
                                             </button>
+                                            {openMenuId === document.id && (
+                                                <div className="absolute right-0 top-8 w-56 bg-white rounded-lg shadow-lg border border-secondary-200 py-1 z-10">
+                                                    {document.status === 'DRAFT' && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                // TODO: Implement send document
+                                                                setOpenMenuId(null);
+                                                            }}
+                                                            className="w-full text-left px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50 flex items-center"
+                                                        >
+                                                            <Send className="h-4 w-4 mr-3" />
+                                                            Send Document
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            window.open(document.fileUrl || '#', '_blank');
+                                                            setOpenMenuId(null);
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50 flex items-center"
+                                                    >
+                                                        <Download className="h-4 w-4 mr-3" />
+                                                        Download Document
+                                                    </button>
+                                                    {document.status === 'COMPLETED' && document.signedFileUrl && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                window.open(document.signedFileUrl || '#', '_blank');
+                                                                setOpenMenuId(null);
+                                                            }}
+                                                            className="w-full text-left px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50 flex items-center"
+                                                        >
+                                                            <Download className="h-4 w-4 mr-3" />
+                                                            Download Signed
+                                                        </button>
+                                                    )}
+                                                    {document.status === 'DRAFT' && (
+                                                        <>
+                                                            <div className="border-t border-secondary-200 my-1"></div>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (confirm('Are you sure you want to delete this document?')) {
+                                                                        // TODO: Implement delete
+                                                                    }
+                                                                    setOpenMenuId(null);
+                                                                }}
+                                                                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
+                                                            >
+                                                                <Trash2 className="h-4 w-4 mr-3" />
+                                                                Delete Document
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>

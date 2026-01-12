@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Users, Search, Edit, Trash2, Eye, UserPlus } from 'lucide-react';
+import { Users, Search, Edit, Trash2, UserPlus, MoreVertical } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { usersAPI } from '@/lib/api';
 import { Input, Select, Pagination, PaginationInfo } from '@/components/ui';
@@ -11,6 +11,7 @@ export default function UserManagement() {
     const [roleFilter, setRoleFilter] = useState<string>('');
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize] = useState(10);
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
     // Fetch users using React Query
     const { data: usersResponse, isLoading, error } = useQuery({
@@ -27,6 +28,15 @@ export default function UserManagement() {
 
     const users = usersResponse?.items || [];
     const totalPages = usersResponse?.totalPages || 0;
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = () => setOpenMenuId(null);
+        if (openMenuId) {
+            document.addEventListener('click', handleClickOutside);
+            return () => document.removeEventListener('click', handleClickOutside);
+        }
+    }, [openMenuId]);
 
     const handleSearchChange = (value: string) => {
         setSearchTerm(value);
@@ -149,7 +159,10 @@ export default function UserManagement() {
                         </thead>
                         <tbody className="bg-white divide-y divide-secondary-200">
                             {users.map((user) => (
-                                <tr key={user.id} className="hover:bg-secondary-50">
+                                <tr key={user.id} className="hover:bg-secondary-50 cursor-pointer" onClick={() => {
+                                    // TODO: Open user detail modal or page
+                                    console.log('View user:', user.id);
+                                }}>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
                                             <div className="flex-shrink-0 h-10 w-10">
@@ -191,17 +204,46 @@ export default function UserManagement() {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-500">
                                         {formatDate(user.createdAt)}
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <div className="flex items-center justify-end space-x-3">
-                                            <button className="text-primary-600 hover:text-primary-900">
-                                                <Eye className="h-4 w-4" />
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex items-center justify-end space-x-3 relative">
+                                            <button 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setOpenMenuId(openMenuId === user.id ? null : user.id);
+                                                }}
+                                                className="text-secondary-400 hover:text-secondary-600 p-1 rounded hover:bg-secondary-100"
+                                            >
+                                                <MoreVertical className="h-4 w-4" />
                                             </button>
-                                            <button className="text-secondary-600 hover:text-secondary-900">
-                                                <Edit className="h-4 w-4" />
-                                            </button>
-                                            <button className="text-red-600 hover:text-red-900">
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
+                                            {openMenuId === user.id && (
+                                                <div className="absolute right-0 top-8 w-48 bg-white rounded-lg shadow-lg border border-secondary-200 py-1 z-10">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            // TODO: Implement edit user
+                                                            setOpenMenuId(null);
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50 flex items-center"
+                                                    >
+                                                        <Edit className="h-4 w-4 mr-3" />
+                                                        Edit User
+                                                    </button>
+                                                    <div className="border-t border-secondary-200 my-1"></div>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (confirm(`Delete user "${user.fullName || user.email}"?`)) {
+                                                                // TODO: Implement delete
+                                                            }
+                                                            setOpenMenuId(null);
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
+                                                    >
+                                                        <Trash2 className="h-4 w-4 mr-3" />
+                                                        Delete User
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>

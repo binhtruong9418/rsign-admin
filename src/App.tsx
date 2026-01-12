@@ -9,6 +9,7 @@ import DocumentCreate from '@/pages/admin/DocumentCreate';
 import DocumentDetail from '@/pages/admin/DocumentDetail';
 import DocumentBatches from '@/pages/admin/DocumentBatches';
 import SignerGroups from '@/pages/admin/SignerGroups';
+import SignerGroupDetail from '@/pages/admin/SignerGroupDetail';
 import UserManagement from '@/pages/admin/UserManagement';
 import TemplateList from '@/pages/admin/TemplateList';
 import TemplateUse from '@/pages/admin/TemplateUse';
@@ -38,6 +39,7 @@ function App() {
                     <Route path="templates/:templateId/use" element={<TemplateUse />} />
                     <Route path="users" element={<UserManagement />} />
                     <Route path="signer-groups" element={<SignerGroups />} />
+                    <Route path="signer-groups/:id" element={<SignerGroupDetail />} />
                     <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
                   </Routes>
                 </AdminLayout>
