@@ -15,6 +15,7 @@ import {
     Bell,
     Folder,
     Layers,
+    ChevronDown,
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -33,6 +34,7 @@ const navigation = [
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [createMenuOpen, setCreateMenuOpen] = useState(false);
     const { user, logout } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
@@ -92,14 +94,46 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                                 <div className="flex-1" />
 
                                 <div className="flex items-center space-x-4">
-                                    {/* Create Document Button */}
-                                    <Link
-                                        to="/admin/documents/create"
-                                        className="btn-primary inline-flex items-center"
-                                    >
-                                        <Plus className="h-4 w-4 mr-2" />
-                                        Create Document
-                                    </Link>
+                                    {/* Create Menu Dropdown */}
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setCreateMenuOpen(!createMenuOpen)}
+                                            className="btn-primary inline-flex items-center"
+                                        >
+                                            <Plus className="h-4 w-4 mr-2" />
+                                            Create New
+                                            <ChevronDown className="h-4 w-4 ml-1" />
+                                        </button>
+
+                                        {createMenuOpen && (
+                                            <>
+                                                <div
+                                                    className="fixed inset-0 z-10"
+                                                    onClick={() => setCreateMenuOpen(false)}
+                                                />
+                                                <div className="absolute right-0 mt-2 w-56 rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
+                                                    <div className="py-1">
+                                                        <Link
+                                                            to="/admin/documents/create"
+                                                            className="flex items-center px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-100"
+                                                            onClick={() => setCreateMenuOpen(false)}
+                                                        >
+                                                            <FileText className="h-4 w-4 mr-3 text-secondary-400" />
+                                                            Create Document
+                                                        </Link>
+                                                        <Link
+                                                            to="/admin/templates/create"
+                                                            className="flex items-center px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-100"
+                                                            onClick={() => setCreateMenuOpen(false)}
+                                                        >
+                                                            <Layers className="h-4 w-4 mr-3 text-secondary-400" />
+                                                            Create Template
+                                                        </Link>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
 
                                     {/* Notifications */}
                                     <button className="p-2 text-secondary-600 hover:text-secondary-900 hover:bg-secondary-100 rounded-lg">

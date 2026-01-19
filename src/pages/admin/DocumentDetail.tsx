@@ -27,6 +27,8 @@ import {
     ZoomOut,
     ChevronLeft,
     ChevronRight,
+    Pencil,
+    AlertTriangle,
 } from 'lucide-react';
 import { formatDate, getStatusLabel, cn } from '@/lib/utils';
 import { documentsAPI } from '@/lib/api';
@@ -109,6 +111,12 @@ export default function DocumentDetailNew() {
                     </div>
                 </div>
                 <div className="flex items-center space-x-3">
+                    {document.status === 'DRAFT' && (
+                        <Button onClick={() => navigate(`/admin/documents/${id}/edit`)}>
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Edit
+                        </Button>
+                    )}
                     {files.original && (
                         <Button variant="outline" onClick={() => window.open(files.original, '_blank')}>
                             <FileText className="h-4 w-4 mr-2" />
@@ -135,11 +143,37 @@ export default function DocumentDetailNew() {
                         <p className="text-2xl font-bold text-secondary-900">
                             {progress.signed}/{progress.signed + progress.pending + progress.declined}
                         </p>
-                        <div className="w-full bg-secondary-200 rounded-full h-2">
+                        {/* Multi-color progress bar */}
+                        <div className="w-full bg-secondary-200 rounded-full h-2 flex overflow-hidden">
                             <div
-                                className="bg-green-600 h-2 rounded-full transition-all"
-                                style={{ width: `${progress.percentage}%` }}
+                                className="bg-green-500 h-2 transition-all"
+                                style={{ width: `${((progress.signed / (progress.signed + progress.pending + progress.declined)) * 100) || 0}%` }}
                             />
+                            <div
+                                className="bg-red-500 h-2 transition-all"
+                                style={{ width: `${((progress.declined / (progress.signed + progress.pending + progress.declined)) * 100) || 0}%` }}
+                            />
+                            <div
+                                className="bg-yellow-500 h-2 transition-all"
+                                style={{ width: `${((progress.pending / (progress.signed + progress.pending + progress.declined)) * 100) || 0}%` }}
+                            />
+                        </div>
+                        {/* Statistics */}
+                        <div className="flex items-center gap-4 text-xs text-secondary-600">
+                            <div className="flex items-center gap-1">
+                                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                <span>Signed: {progress.signed}</span>
+                            </div>
+                            {progress.declined > 0 && (
+                                <div className="flex items-center gap-1">
+                                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                                    <span>Declined: {progress.declined}</span>
+                                </div>
+                            )}
+                            <div className="flex items-center gap-1">
+                                <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                                <span>Pending: {progress.pending}</span>
+                            </div>
                         </div>
                     </div>
                 </Card>
@@ -398,17 +432,33 @@ function OverviewTab({ document, files, progress, timeline, signers, steps, zone
                                         <Badge
                                             variant={
                                                 signer.status === 'SIGNED' ? 'success' :
-                                                    signer.status === 'PENDING' ? 'warning' : 'default'
+                                                    signer.status === 'DECLINED' ? 'danger' :
+                                                        signer.status === 'PENDING' ? 'warning' : 'default'
                                             }
                                             className="text-xs"
                                         >
-                                            {signer.status}
+                                            {signer.status === 'SIGNED' ? '✓ Signed' :
+                                                signer.status === 'DECLINED' ? '✗ Declined' :
+                                                    signer.status === 'PENDING' ? '⏳ Pending' :
+                                                        signer.status === 'WAITING' ? '⏸ Waiting' : signer.status}
                                         </Badge>
                                     </div>
                                     {signer.signedAt && (
                                         <p className="text-xs text-secondary-500 mt-1">
                                             Signed {formatDate(signer.signedAt)}
                                         </p>
+                                    )}
+                                    {signer.status === 'DECLINED' && signer.declinedAt && (
+                                        <div className="mt-3 p-2 bg-red-50 rounded border-l-4 border-red-500">
+                                            <div className="flex items-start gap-2">
+                                                <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+                                                <div className="flex-1">
+                                                    <p className="text-xs font-medium text-red-900">Declined Reason:</p>
+                                                    <p className="text-xs text-red-800 mt-1">{signer.declineReason || 'No reason provided'}</p>
+                                                    <p className="text-xs text-red-600 mt-1">{formatDate(signer.declinedAt)}</p>
+                                                </div>
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
                             ))}

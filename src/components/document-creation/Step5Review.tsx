@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { PDFErrorBoundary } from '@/components/ui/PDFErrorBoundary';
-import { toast } from 'react-hot-toast';
+import { showToast } from '@/lib/toast';
 import { documentsAPI } from '@/lib/api';
 import { PDF_OPTIONS } from '@/lib/pdf-worker';
 import type { DocumentData } from '@/types/document-creation';
@@ -20,9 +20,11 @@ interface Step5ReviewProps {
     documentData: DocumentData;
     updateDocumentData: (updates: Partial<DocumentData>) => void;
     onPrevious: () => void;
+    isEditMode?: boolean;
+    documentId?: string;
 }
 
-export function Step5Review({ documentData, updateDocumentData, onPrevious }: Step5ReviewProps) {
+export function Step5Review({ documentData, updateDocumentData, onPrevious, isEditMode = false, documentId }: Step5ReviewProps) {
     const [isSending, setIsSending] = useState(false);
     const [isComplete, setIsComplete] = useState(false);
     const [batchId, setBatchId] = useState<string>('');
@@ -39,39 +41,53 @@ export function Step5Review({ documentData, updateDocumentData, onPrevious }: St
     const handleSend = async () => {
         setIsSending(true);
 
-        const createPromise = (async () => {
-            // Build request with sendImmediately: true for send action
-            const request = buildCreateDocumentRequest(documentData, true);
-            console.log('Creating and sending document with request:', request);
+        const actionPromise = (async () => {
+            if (isEditMode && documentId) {
+                // Edit mode: Update existing document
+                const request = buildCreateDocumentRequest(documentData, true);
+                console.log('Updating and sending document with request:', request);
 
-            const response = await documentsAPI.createDocument(request);
-
-            // Handle response based on document type
-            if (response.batchId) {
-                setBatchId(response.batchId);
-            } else if (response.document?.id) {
-                setBatchId(response.document.id);
+                await documentsAPI.updateDocument(documentId, request);
+                return { documentId };
             } else {
-                setBatchId('doc-' + Date.now());
+                // Create mode: Create new document
+                const request = buildCreateDocumentRequest(documentData, true);
+                console.log('Creating and sending document with request:', request);
+
+                const response = await documentsAPI.createDocument(request);
+
+                // Handle response based on document type
+                if (response.batchId) {
+                    setBatchId(response.batchId);
+                } else if (response.document?.id) {
+                    setBatchId(response.document.id);
+                } else {
+                    setBatchId('doc-' + Date.now());
+                }
+
+                return response;
             }
-            
-            return response;
         })();
 
-        toast.promise(
-            createPromise,
+        showToast.promise(
+            actionPromise,
             {
-                loading: 'Creating and sending documents...',
-                success: `Document${documentData.type === 'INDIVIDUAL' ? 's' : ''} created and sent successfully!`,
-                error: (err) => err?.error || err?.message || 'Failed to create documents'
+                loading: isEditMode ? 'Updating document...' : 'Creating and sending documents...',
+                success: isEditMode ? 'Document updated successfully!' : `Document${documentData.type === 'INDIVIDUAL' ? 's' : ''} created and sent successfully!`,
+                error: (err) => err?.error || err?.message || `Failed to ${isEditMode ? 'update' : 'create'} documents`
             }
         );
 
         try {
-            await createPromise;
-            setIsComplete(true);
+            await actionPromise;
+            if (isEditMode && documentId) {
+                // Redirect to document detail page
+                navigate(`/admin/documents/${documentId}`);
+            } else {
+                setIsComplete(true);
+            }
         } catch (error: any) {
-            console.error('Failed to create document:', error);
+            console.error(`Failed to ${isEditMode ? 'update' : 'create'} document:`, error);
         } finally {
             setIsSending(false);
         }
@@ -80,39 +96,53 @@ export function Step5Review({ documentData, updateDocumentData, onPrevious }: St
     const handleSaveDraft = async () => {
         setIsSending(true);
 
-        const createPromise = (async () => {
-            // Build request with sendImmediately: false for draft action
-            const request = buildCreateDocumentRequest(documentData, false);
-            console.log('Saving document as draft with request:', request);
+        const actionPromise = (async () => {
+            if (isEditMode && documentId) {
+                // Edit mode: Update existing document as draft
+                const request = buildCreateDocumentRequest(documentData, false);
+                console.log('Updating document as draft with request:', request);
 
-            const response = await documentsAPI.createDocument(request);
-
-            // Handle response based on document type
-            if (response.batchId) {
-                setBatchId(response.batchId);
-            } else if (response.document?.id) {
-                setBatchId(response.document.id);
+                await documentsAPI.updateDocument(documentId, request);
+                return { documentId };
             } else {
-                setBatchId('doc-' + Date.now());
+                // Create mode: Create new document as draft
+                const request = buildCreateDocumentRequest(documentData, false);
+                console.log('Saving document as draft with request:', request);
+
+                const response = await documentsAPI.createDocument(request);
+
+                // Handle response based on document type
+                if (response.batchId) {
+                    setBatchId(response.batchId);
+                } else if (response.document?.id) {
+                    setBatchId(response.document.id);
+                } else {
+                    setBatchId('doc-' + Date.now());
+                }
+
+                return response;
             }
-            
-            return response;
         })();
 
-        toast.promise(
-            createPromise,
+        showToast.promise(
+            actionPromise,
             {
-                loading: 'Saving draft...',
-                success: `Draft saved successfully!`,
-                error: (err) => err?.error || err?.message || 'Failed to save draft'
+                loading: isEditMode ? 'Updating draft...' : 'Saving draft...',
+                success: isEditMode ? 'Draft updated successfully!' : 'Draft saved successfully!',
+                error: (err) => err?.error || err?.message || `Failed to ${isEditMode ? 'update' : 'save'} draft`
             }
         );
 
         try {
-            await createPromise;
-            setIsComplete(true);
+            await actionPromise;
+            if (isEditMode && documentId) {
+                // Redirect to document detail page
+                navigate(`/admin/documents/${documentId}`);
+            } else {
+                setIsComplete(true);
+            }
         } catch (error: any) {
-            console.error('Failed to save draft:', error);
+            console.error(`Failed to ${isEditMode ? 'update' : 'save'} draft:`, error);
         } finally {
             setIsSending(false);
         }
@@ -121,8 +151,8 @@ export function Step5Review({ documentData, updateDocumentData, onPrevious }: St
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-lg font-semibold text-secondary-900 mb-2">Review & Send</h2>
-                <p className="text-secondary-600">Review your document before sending it for signatures.</p>
+                <h2 className="text-lg font-semibold text-secondary-900 mb-2">{isEditMode ? 'Review & Update' : 'Review & Send'}</h2>
+                <p className="text-secondary-600">{isEditMode ? 'Review your changes before updating the document.' : 'Review your document before sending it for signatures.'}</p>
             </div>
 
             {/* Document Summary */}
@@ -210,7 +240,7 @@ export function Step5Review({ documentData, updateDocumentData, onPrevious }: St
                                     </div>
                                     <Badge variant="primary">{documentData.selectedGroup.memberCount} recipients</Badge>
                                 </div>
-                                
+
                                 <div className="space-y-2 pl-4 border-l-2 border-secondary-200">
                                     <div className="text-sm font-medium text-secondary-700 mb-2">Group Members:</div>
                                     {documentData.selectedGroup.members.map((member, index) => (
@@ -226,7 +256,7 @@ export function Step5Review({ documentData, updateDocumentData, onPrevious }: St
                                         </div>
                                     ))}
                                 </div>
-                                
+
                                 <div className="mt-3 p-3 bg-secondary-50 rounded-lg text-sm text-secondary-600">
                                     <strong>Note:</strong> Each member will receive their own copy of the document with {documentData.signatureZones.length} signature zone{documentData.signatureZones.length > 1 ? 's' : ''}.
                                 </div>
@@ -246,7 +276,7 @@ export function Step5Review({ documentData, updateDocumentData, onPrevious }: St
                                         <Check className="h-4 w-4 text-green-600" />
                                     </div>
                                 ))}
-                                
+
                                 <div className="mt-3 p-3 bg-secondary-50 rounded-lg text-sm text-secondary-600">
                                     <strong>Note:</strong> Each recipient will receive their own copy with {documentData.signatureZones.length} signature zone{documentData.signatureZones.length > 1 ? 's' : ''}.
                                 </div>
@@ -263,8 +293,8 @@ export function Step5Review({ documentData, updateDocumentData, onPrevious }: St
                                     {documentData.signingFlow === 'PARALLEL' ? 'Parallel Signing' : 'Sequential Signing'}
                                 </div>
                                 <div className="text-xs text-secondary-600">
-                                    {documentData.signingFlow === 'PARALLEL' 
-                                        ? 'All signers can sign simultaneously' 
+                                    {documentData.signingFlow === 'PARALLEL'
+                                        ? 'All signers can sign simultaneously'
                                         : 'Signers must sign in order, step by step'
                                     }
                                 </div>

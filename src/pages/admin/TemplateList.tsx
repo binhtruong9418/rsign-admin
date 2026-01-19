@@ -10,30 +10,43 @@ import {
     Calendar,
     User,
     Layers,
+    Search,
 } from 'lucide-react';
 import { templatesAPI } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Pagination } from '@/components/ui/Pagination';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { formatDate } from '@/lib/utils';
-import { toast } from 'react-hot-toast';
-import type { Document } from '@/types';
+import { showToast } from '@/lib/toast';
 
 export default function TemplateList() {
     const navigate = useNavigate();
-    const [currentPage, setCurrentPage] = useState(0);
+    const [currentPage, setCurrentPage] = useState(1);
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [filters, setFilters] = useState({
+        search: '',
+        signingMode: '',
+        signingFlow: '',
+    });
     const limit = 10;
 
     const { data, isLoading, error, refetch } = useQuery({
-        queryKey: ['templates', currentPage],
-        queryFn: () => templatesAPI.getTemplates({ page: currentPage, limit }),
+        queryKey: ['templates', currentPage, filters],
+        queryFn: () => templatesAPI.getTemplates({
+            page: currentPage,
+            limit,
+            search: filters.search || undefined,
+            signingMode: filters.signingMode || undefined,
+            signingFlow: filters.signingFlow || undefined,
+        }),
     });
 
     const handleDelete = async (templateId: string, templateName: string) => {
         if (
             !confirm(
-                `Delete template "${templateName}"?\n\nDocuments created from this template will not be affected.`
+                `Delete template "${templateName}"?\n\nThis action cannot be undone. Documents created from this template will not be affected.`
             )
         ) {
             return;
@@ -42,12 +55,10 @@ export default function TemplateList() {
         setDeletingId(templateId);
         try {
             const result = await templatesAPI.deleteTemplate(templateId);
-            toast.success(
-                `Template deleted successfully. ${result.affectedDocuments} documents were using this template.`
-            );
+            showToast.success(result.message || 'Template deleted successfully');
             refetch();
         } catch (error: any) {
-            toast.error(error.error || 'Failed to delete template');
+            showToast.error(error.error || error.message || 'Failed to delete template');
         } finally {
             setDeletingId(null);
         }
@@ -68,7 +79,7 @@ export default function TemplateList() {
     }
 
     const templates = data?.items || [];
-    const totalPages = data?.totalPages || 0;
+    const totalPages = data?.totalPages || 1;
 
     return (
         <div className="space-y-6">
@@ -82,10 +93,42 @@ export default function TemplateList() {
                         Create reusable document templates for faster workflow
                     </p>
                 </div>
-                <Button onClick={() => navigate('/admin/documents/create')}>
+                <Button onClick={() => navigate('/admin/templates/create')}>
                     <Plus className="h-4 w-4 mr-2" />
                     Create Template
                 </Button>
+            </div>
+
+            {/* Filters */}
+            <div className="card p-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="md:col-span-2">
+                        <Input
+                            placeholder="Search templates..."
+                            value={filters.search}
+                            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                            leftIcon={<Search className="h-4 w-4" />}
+                        />
+                    </div>
+                    <Select
+                        value={filters.signingMode}
+                        onChange={(e) => setFilters({ ...filters, signingMode: e.target.value })}
+                        options={[
+                            { value: '', label: 'All Modes' },
+                            { value: 'INDIVIDUAL', label: 'Individual' },
+                            { value: 'SHARED', label: 'Shared' },
+                        ]}
+                    />
+                    <Select
+                        value={filters.signingFlow}
+                        onChange={(e) => setFilters({ ...filters, signingFlow: e.target.value })}
+                        options={[
+                            { value: '', label: 'All Flows' },
+                            { value: 'SEQUENTIAL', label: 'Sequential' },
+                            { value: 'PARALLEL', label: 'Parallel' },
+                        ]}
+                    />
+                </div>
             </div>
 
             {/* Stats */}
@@ -96,7 +139,7 @@ export default function TemplateList() {
                     </span>
                     <span>•</span>
                     <span>
-                        Page {currentPage + 1} of {totalPages || 1}
+                        Page {currentPage} of {totalPages || 1}
                     </span>
                 </div>
             )}
@@ -111,7 +154,7 @@ export default function TemplateList() {
                     <p className="text-secondary-600 mb-4">
                         Create your first document template to speed up your workflow
                     </p>
-                    <Button onClick={() => navigate('/admin/documents/create')}>
+                    <Button onClick={() => navigate('/admin/templates/create')}>
                         <Plus className="h-4 w-4 mr-2" />
                         Create First Template
                     </Button>
@@ -153,7 +196,7 @@ export default function TemplateList() {
                                 <div className="flex items-center text-xs text-secondary-600">
                                     <Layers className="h-3 w-3 mr-1.5" />
                                     {template.totalSteps || 0} steps •{' '}
-                                    {template.signatureZones?.length || 0} zones
+                                    {template.signatureZoneCount || 0} zones
                                 </div>
                             </div>
 
@@ -180,13 +223,13 @@ export default function TemplateList() {
                                     className="flex-1"
                                 >
                                     <Copy className="h-3 w-3 mr-1.5" />
-                                    Use Template
+                                    Use
                                 </Button>
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     onClick={() =>
-                                        navigate(`/admin/documents/${template.id}`)
+                                        navigate(`/admin/templates/${template.id}`)
                                     }
                                 >
                                     <Edit className="h-3 w-3" />

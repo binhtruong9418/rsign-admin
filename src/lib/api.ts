@@ -46,7 +46,7 @@ api.interceptors.request.use(
     },
     (error) => {
         return Promise.reject(error);
-    }
+    },
 );
 
 // Response interceptor for error handling
@@ -86,7 +86,7 @@ api.interceptors.response.use(
             error: errorMessage,
             statusCode: error.response.status,
         });
-    }
+    },
 );
 
 // API endpoints
@@ -119,7 +119,7 @@ export const authAPI = {
 
 export const documentsAPI = {
     getDocuments: async (
-        params: EnhancedDocumentFilters
+        params: EnhancedDocumentFilters,
     ): Promise<PaginationResponse<Document>> => {
         const response = await api.get("/admin/documents", { params });
         return response.data;
@@ -131,24 +131,32 @@ export const documentsAPI = {
     },
 
     createDocument: async (
-        documentData: CreateDocumentRequest
+        documentData: CreateDocumentRequest,
     ): Promise<DocumentCreateResponse> => {
         const response = await api.post("/admin/documents", documentData);
         return response.data;
     },
 
+    updateDocument: async (
+        id: string,
+        documentData: Partial<CreateDocumentRequest>,
+    ): Promise<{ success: boolean; document: any }> => {
+        const response = await api.put(`/admin/documents/${id}`, documentData);
+        return response.data;
+    },
+
     createIndividualDocument: async (
-        documentData: Partial<CreateDocumentRequest>
+        documentData: Partial<CreateDocumentRequest>,
     ): Promise<DocumentCreateResponse> => {
         const response = await api.post(
             "/admin/documents/individual",
-            documentData
+            documentData,
         );
         return response.data;
     },
 
     getDocumentProgress: async (
-        id: string
+        id: string,
     ): Promise<DocumentProgressResponse> => {
         const response = await api.get(`/admin/documents/${id}/progress`);
         return response.data;
@@ -160,14 +168,14 @@ export const documentsAPI = {
     },
 
     getBatchDocuments: async (
-        batchId: string
+        batchId: string,
     ): Promise<PaginationResponse<Document>> => {
         const response = await api.get(`/admin/documents/batch/${batchId}`);
         return response.data;
     },
 
     uploadDocument: async (
-        request: UploadUrlRequest
+        request: UploadUrlRequest,
     ): Promise<UploadUrlResponse> => {
         const response = await api.post("/admin/documents/upload-url", request);
         return response.data;
@@ -176,7 +184,7 @@ export const documentsAPI = {
     // Helper method to upload file using presigned URL
     uploadFileToPresignedUrl: async (
         presignedUrl: string,
-        file: File
+        file: File,
     ): Promise<void> => {
         await fetch(presignedUrl, {
             method: "PUT",
@@ -204,7 +212,7 @@ export const signerGroupsAPI = {
     },
 
     createSignerGroup: async (
-        groupData: CreateSignerGroupRequest
+        groupData: CreateSignerGroupRequest,
     ): Promise<SignerGroup> => {
         const response = await api.post("/admin/signer-groups", groupData);
         return response.data;
@@ -212,7 +220,7 @@ export const signerGroupsAPI = {
 
     updateSignerGroup: async (
         id: string,
-        groupData: { name: string; description?: string }
+        groupData: { name: string; description?: string },
     ): Promise<SignerGroup> => {
         const response = await api.put(`/admin/signer-groups/${id}`, groupData);
         return response.data;
@@ -225,7 +233,7 @@ export const signerGroupsAPI = {
 
     addMembers: async (
         id: string,
-        userIds: string[]
+        userIds: string[],
     ): Promise<{ success: boolean }> => {
         const response = await api.post(`/admin/signer-groups/${id}/members`, {
             userIds,
@@ -235,10 +243,10 @@ export const signerGroupsAPI = {
 
     removeMember: async (
         groupId: string,
-        userId: string
+        userId: string,
     ): Promise<{ success: boolean }> => {
         const response = await api.delete(
-            `/admin/signer-groups/${groupId}/members/${userId}`
+            `/admin/signer-groups/${groupId}/members/${userId}`,
         );
         return response.data;
     },
@@ -274,23 +282,23 @@ export const signingAPI = {
     },
 
     getDocumentDetails: async (
-        documentSignerId: string
+        documentSignerId: string,
     ): Promise<DocumentSigningDetails> => {
         const response = await api.get(
-            `/documents/${documentSignerId}/details`
+            `/documents/${documentSignerId}/details`,
         );
         return response.data;
     },
 
     checkout: async (documentSignerId: string): Promise<CheckoutResponse> => {
         const response = await api.post(
-            `/documents/${documentSignerId}/checkout`
+            `/documents/${documentSignerId}/checkout`,
         );
         return response.data;
     },
 
     submitSignature: async (
-        request: SignDocumentRequest
+        request: SignDocumentRequest,
     ): Promise<{ success: boolean }> => {
         const response = await api.post("/documents/sign", request);
         return response.data;
@@ -298,11 +306,11 @@ export const signingAPI = {
 
     declineDocument: async (
         documentSignerId: string,
-        reason: string
+        reason: string,
     ): Promise<{ success: boolean }> => {
         const response = await api.post(
             `/documents/${documentSignerId}/decline`,
-            { reason }
+            { reason },
         );
         return response.data;
     },
@@ -319,7 +327,7 @@ export const signingAPI = {
 // Document Batch Management API
 export const documentBatchAPI = {
     getDocumentBatches: async (
-        params: DocumentBatchFilters
+        params: DocumentBatchFilters,
     ): Promise<PaginationResponse<DocumentBatch>> => {
         const response = await api.get("/admin/document-batches", { params });
         return response.data;
@@ -332,14 +340,14 @@ export const documentBatchAPI = {
 
     sendDocumentBatch: async (batchId: string): Promise<BatchSendResponse> => {
         const response = await api.post(
-            `/admin/document-batches/${batchId}/send`
+            `/admin/document-batches/${batchId}/send`,
         );
         return response.data;
     },
 
     getBatchDocuments: async (
         batchId: string,
-        params?: { page?: number; limit?: number }
+        params?: { page?: number; limit?: number },
     ): Promise<PaginationResponse<Document>> => {
         const response = await api.get(`/admin/documents/batch/${batchId}`, {
             params,
@@ -350,74 +358,81 @@ export const documentBatchAPI = {
 
 // Template Management API
 export const templatesAPI = {
-    // List all templates with pagination
+    // Get presigned URL for template file upload
+    getUploadUrl: async (request: {
+        fileName: string;
+    }): Promise<{
+        success: true;
+        presignedUrl: string;
+        fileUrl: string;
+    }> => {
+        const response = await api.post("/admin/templates/upload-url", request);
+        return response.data;
+    },
+
+    // Upload file to presigned URL
+    uploadFileToPresignedUrl: async (
+        presignedUrl: string,
+        file: File,
+    ): Promise<void> => {
+        await fetch(presignedUrl, {
+            method: "PUT",
+            body: file,
+            headers: {
+                "Content-Type": "application/pdf",
+            },
+        });
+    },
+
+    // Create new template
+    createTemplate: async (
+        data: any,
+    ): Promise<{
+        success: true;
+        template: any;
+    }> => {
+        const response = await api.post("/admin/templates", data);
+        return response.data;
+    },
+
+    // List templates with filters
     getTemplates: async (params: {
         page?: number;
         limit?: number;
-    }): Promise<PaginationResponse<Document>> => {
+        search?: string;
+        signingMode?: string;
+        signingFlow?: string;
+    }): Promise<{
+        items: any[];
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+        hasNextPage: boolean;
+        hasPreviousPage: boolean;
+    }> => {
         const response = await api.get("/admin/templates", { params });
         return response.data;
     },
 
-    // Get template details (uses document endpoint since templates are documents)
-    getTemplate: async (templateId: string): Promise<Document> => {
-        const response = await api.get(`/admin/documents/${templateId}`);
-        return response.data;
-    },
-
-    // Create document from template
-    createFromTemplate: async (
+    // Get template detail
+    getTemplate: async (
         templateId: string,
-        data: {
-            title: string;
-            deadline?: string;
-            signingSteps: Array<{
-                stepOrder: number;
-                signers: Array<{
-                    userId: string;
-                    zoneIndex: number;
-                }>;
-            }>;
-            recipients?: {
-                userIds?: string[];
-                signerGroupId?: string;
-            };
-        }
-    ): Promise<{ success: true; document: Document }> => {
-        const response = await api.post(
-            `/admin/documents/from-template/${templateId}`,
-            data
-        );
+    ): Promise<{
+        success: true;
+        template: any;
+    }> => {
+        const response = await api.get(`/admin/templates/${templateId}`);
         return response.data;
     },
 
     // Update template
     updateTemplate: async (
         templateId: string,
-        data: {
-            title?: string;
-            templateName?: string;
-            signatureZones?: Array<{
-                pageNumber: number;
-                x: number;
-                y: number;
-                width: number;
-                height: number;
-                label?: string;
-            }>;
-            signingSteps?: Array<{
-                stepOrder: number;
-                totalSigners: number;
-            }>;
-        }
+        data: any,
     ): Promise<{
         success: true;
-        template: {
-            id: string;
-            title: string;
-            templateName: string;
-            isTemplate: boolean;
-        };
+        template: any;
     }> => {
         const response = await api.put(`/admin/templates/${templateId}`, data);
         return response.data;
@@ -425,13 +440,42 @@ export const templatesAPI = {
 
     // Delete template
     deleteTemplate: async (
-        templateId: string
+        templateId: string,
     ): Promise<{
         success: true;
         message: string;
-        affectedDocuments: number;
     }> => {
         const response = await api.delete(`/admin/templates/${templateId}`);
+        return response.data;
+    },
+
+    // Duplicate template
+    duplicateTemplate: async (
+        templateId: string,
+        newTemplateName: string,
+    ): Promise<{
+        success: true;
+        template: any;
+    }> => {
+        const response = await api.post(
+            `/admin/templates/${templateId}/duplicate`,
+            {
+                newTemplateName,
+            },
+        );
+        return response.data;
+    },
+
+    // Create document from template
+    createDocumentFromTemplate: async (
+        data: any,
+    ): Promise<{
+        success: true;
+        document?: any;
+        documents?: any[];
+        batchId?: string;
+    }> => {
+        const response = await api.post("/admin/documents/from-template", data);
         return response.data;
     },
 };

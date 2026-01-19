@@ -255,30 +255,6 @@ export function Step2Upload({ documentData, updateDocumentData, onNext, onPrevio
                 </div>
             )}
 
-            {/* Save as Template */}
-            <div className="border-t pt-4">
-                <label className="flex items-center">
-                    <input
-                        type="checkbox"
-                        checked={documentData.saveAsTemplate}
-                        onChange={(e) => updateDocumentData({ saveAsTemplate: e.target.checked })}
-                        className="mr-3"
-                    />
-                    <span className="text-sm font-medium text-secondary-700">Save as template for future use</span>
-                </label>
-
-                {documentData.saveAsTemplate && (
-                    <div className="mt-3">
-                        <Input
-                            type="text"
-                            placeholder="Template name"
-                            value={documentData.templateName}
-                            onChange={(e) => updateDocumentData({ templateName: e.target.value })}
-                        />
-                    </div>
-                )}
-            </div>
-
             <div className="flex justify-between">
                 <Button variant="outline" onClick={onPrevious}>
                     <ArrowLeft className="mr-2 h-4 w-4" />
