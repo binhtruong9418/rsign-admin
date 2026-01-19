@@ -35,13 +35,18 @@ export default function TemplateList() {
     const { data, isLoading, error, refetch } = useQuery({
         queryKey: ['templates', currentPage, filters],
         queryFn: () => templatesAPI.getTemplates({
-            page: currentPage,
+            page: currentPage - 1,
             limit,
             search: filters.search || undefined,
             signingMode: filters.signingMode || undefined,
             signingFlow: filters.signingFlow || undefined,
         }),
     });
+
+    const handleFilterChange = (newFilters: Partial<typeof filters>) => {
+        setFilters({ ...filters, ...newFilters });
+        setCurrentPage(1); // Reset to first page when filters change
+    };
 
     const handleDelete = async (templateId: string, templateName: string) => {
         if (
@@ -106,13 +111,13 @@ export default function TemplateList() {
                         <Input
                             placeholder="Search templates..."
                             value={filters.search}
-                            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                            onChange={(e) => handleFilterChange({ search: e.target.value })}
                             leftIcon={<Search className="h-4 w-4" />}
                         />
                     </div>
                     <Select
                         value={filters.signingMode}
-                        onChange={(e) => setFilters({ ...filters, signingMode: e.target.value })}
+                        onChange={(e) => handleFilterChange({ signingMode: e.target.value })}
                         options={[
                             { value: '', label: 'All Modes' },
                             { value: 'INDIVIDUAL', label: 'Individual' },
@@ -121,7 +126,7 @@ export default function TemplateList() {
                     />
                     <Select
                         value={filters.signingFlow}
-                        onChange={(e) => setFilters({ ...filters, signingFlow: e.target.value })}
+                        onChange={(e) => handleFilterChange({ signingFlow: e.target.value })}
                         options={[
                             { value: '', label: 'All Flows' },
                             { value: 'SEQUENTIAL', label: 'Sequential' },

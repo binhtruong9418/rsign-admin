@@ -420,9 +420,9 @@ export default function DocumentList() {
                         </thead>
                         <tbody className="bg-white divide-y divide-secondary-200">
                             {documents.map((document) => (
-                                <tr 
-                                    key={document.id} 
-                                    className="hover:bg-secondary-50 cursor-pointer" 
+                                <tr
+                                    key={document.id}
+                                    className="hover:bg-secondary-50 cursor-pointer"
                                     onClick={() => navigate(`/admin/documents/${document.id}`)}
                                 >
                                     <td className="px-6 py-4 whitespace-nowrap">
@@ -513,7 +513,7 @@ export default function DocumentList() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium" onClick={(e) => e.stopPropagation()}>
                                         <div className="flex items-center justify-end space-x-3 relative">
-                                            <button 
+                                            <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     setOpenMenuId(openMenuId === document.id ? null : document.id);
@@ -540,7 +540,7 @@ export default function DocumentList() {
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            window.open(document.fileUrl || '#', '_blank');
+                                                            window.open(document.originalFileUrl || '#', '_blank');
                                                             setOpenMenuId(null);
                                                         }}
                                                         className="w-full text-left px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50 flex items-center"

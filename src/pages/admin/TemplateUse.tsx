@@ -34,7 +34,7 @@ export default function TemplateUse() {
     const [selectionMode, setSelectionMode] = useState<'INDIVIDUAL' | 'GROUP'>('INDIVIDUAL');
 
     // Fetch template details
-    const { data: template, isLoading: templateLoading } = useQuery({
+    const { data: templateResponse, isLoading: templateLoading } = useQuery({
         queryKey: ['template', templateId],
         queryFn: () => templatesAPI.getTemplate(templateId!),
         enabled: !!templateId,
@@ -54,6 +54,7 @@ export default function TemplateUse() {
 
     const users = usersData?.items || [];
     const groups = groupsData?.items || [];
+    const template = templateResponse?.template;
 
     const handleAssignmentChange = (roleIndex: number, userId: string) => {
         setSignerAssignments(prev => ({
@@ -99,12 +100,15 @@ export default function TemplateUse() {
                 request.recipientIds = recipientIds;
             } else {
                 // For SHARED mode, pass signers with role mapping
-                request.signers = template.signers?.map((signer, index) => ({
+                request.signers = template.signers?.map((signer: any, index: number) => ({
                     userId: signerAssignments[index],
                 }));
             }
 
-            const createPromise = templatesAPI.createDocumentFromTemplate(templateId!, request);
+            const createPromise = templatesAPI.createDocumentFromTemplate({
+                templateId: templateId!,
+                ...request
+            });
 
             showToast.promise(
                 createPromise,
@@ -116,7 +120,12 @@ export default function TemplateUse() {
             );
 
             const result = await createPromise;
-            navigate(`/admin/documents/${result.id}`);
+            // Navigate to document or batch based on response
+            if (result.document?.id) {
+                navigate(`/admin/documents/${result.document.id}`);
+            } else if (result.batchId) {
+                navigate(`/admin/document-batches`);
+            }
         } catch (error: any) {
             console.error('Failed to create document:', error);
         } finally {
@@ -251,7 +260,7 @@ export default function TemplateUse() {
                                 <p className="text-sm text-secondary-600">
                                     Select users who will receive individual copies of this document.
                                 </p>
-                                {template.signers?.map((signer, index) => (
+                                {template.signers?.map((signer: any, index: number) => (
                                     <div key={index}>
                                         <label className="block text-sm font-medium text-secondary-700 mb-2">
                                             {signer.role} {signer.description && `(${signer.description})`}
@@ -274,7 +283,7 @@ export default function TemplateUse() {
                                 <p className="text-sm text-secondary-600">
                                     All signers will receive the document at the same time.
                                 </p>
-                                {template.signers?.map((signer, index) => (
+                                {template.signers?.map((signer: any, index: number) => (
                                     <div key={index} className="flex items-start gap-3">
                                         <div className="w-8 h-8 rounded flex items-center justify-center text-white font-medium flex-shrink-0 mt-7"
                                             style={{ backgroundColor: signer.color }}>
@@ -303,14 +312,14 @@ export default function TemplateUse() {
                                 <p className="text-sm text-secondary-600">
                                     Signers must sign in sequential order. Each step must be completed before the next begins.
                                 </p>
-                                {template.signingSteps?.map((step, stepIndex) => (
+                                {template.signingSteps?.map((step: any, stepIndex: number) => (
                                     <Card key={stepIndex} className="p-4 border border-secondary-200">
                                         <div className="font-medium text-secondary-900 mb-3">
                                             Step {step.stepNumber}
                                         </div>
                                         <div className="space-y-3">
-                                            {step.signers.map((signer, signerIndex) => {
-                                                const globalIndex = template.signers?.findIndex(s => s.role === signer.role) || 0;
+                                            {step.signers.map((signer: any, signerIndex: number) => {
+                                                const globalIndex = template.signers?.findIndex((s: any) => s.role === signer.role) || 0;
                                                 return (
                                                     <div key={signerIndex} className="flex items-start gap-3">
                                                         <div className="w-6 h-6 rounded flex items-center justify-center text-white text-sm font-medium flex-shrink-0 mt-7"
