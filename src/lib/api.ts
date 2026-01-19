@@ -329,18 +329,18 @@ export const documentBatchAPI = {
     getDocumentBatches: async (
         params: DocumentBatchFilters,
     ): Promise<PaginationResponse<DocumentBatch>> => {
-        const response = await api.get("/admin/document-batches", { params });
+        const response = await api.get("/admin/documents/batches", { params });
         return response.data;
     },
 
     getDocumentBatch: async (batchId: string): Promise<DocumentBatch> => {
-        const response = await api.get(`/admin/document-batches/${batchId}`);
+        const response = await api.get(`/admin/documents/batches/${batchId}`);
         return response.data;
     },
 
     sendDocumentBatch: async (batchId: string): Promise<BatchSendResponse> => {
         const response = await api.post(
-            `/admin/document-batches/${batchId}/send`,
+            `/admin/documents/batches/${batchId}/send`,
         );
         return response.data;
     },

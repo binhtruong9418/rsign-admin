@@ -1,73 +1,247 @@
-# React + TypeScript + Vite
+# RSign Admin - Digital Signature Management System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+RSign Admin is a comprehensive web-based administrative platform for managing digital signatures, documents, templates, and user workflows. Built with React, TypeScript, and modern web technologies.
 
-Currently, two official plugins are available:
+## 🚀 Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Document Management**: Create, send, track, and manage signature documents
+- **Template System**: Build reusable document templates with predefined signature zones
+- **Batch Operations**: Handle multiple documents efficiently with batch processing
+- **User Management**: Manage users, roles, and permissions
+- **Signer Groups**: Organize signers into reusable groups
+- **Real-time Dashboard**: Monitor document status and signing progress
+- **PDF Zone Placement**: Interactive PDF viewer for signature zone configuration
+- **Multi-signing Modes**:
+    - Individual (separate documents per signer)
+    - Shared (single document with multiple signers)
+- **Signing Flows**: Sequential or parallel signing workflows
 
-## React Compiler
+## 📋 Prerequisites
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Before you begin, ensure you have the following installed:
 
-## Expanding the ESLint configuration
+- **Node.js**: Version 18.x or higher
+- **npm**: Version 9.x or higher (comes with Node.js)
+- **Git**: For cloning the repository
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## 🛠️ Installation
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### 1. Clone the Repository
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+git clone https://github.com/binhtruong9418/rsign-admin.git
+cd rsign-admin
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### 2. Install Dependencies
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
+
+### 3. Environment Configuration
+
+Create a `.env` file in the root directory:
+
+```bash
+# API Configuration
+VITE_API_URL=http://localhost:3000/api
+
+# Optional: Other configurations
+# VITE_APP_NAME=RSign Admin
+```
+
+**Important Environment Variables:**
+
+- `VITE_API_URL`: Backend API base URL (required)
+
+### 4. Start Development Server
+
+```bash
+npm run dev
+```
+
+The application will be available at `http://localhost:5173`
+
+## 📦 Build for Production
+
+### Build the Project
+
+```bash
+npm run build
+```
+
+This will:
+
+1. Run TypeScript compiler (`tsc -b`)
+2. Build optimized production files in `dist/` directory
+
+### Preview Production Build
+
+```bash
+npm run preview
+```
+
+## 🏗️ Project Structure
+
+```
+rsign-admin/
+├── src/
+│   ├── assets/          # Static assets (images, fonts)
+│   ├── components/      # Reusable React components
+│   │   ├── document-creation/   # Document creation wizard
+│   │   ├── template-creation/   # Template creation wizard
+│   │   ├── layout/             # Layout components
+│   │   └── ui/                 # UI components (Button, Input, etc.)
+│   ├── contexts/        # React Context providers
+│   ├── hooks/          # Custom React hooks
+│   ├── lib/            # Utilities and API clients
+│   ├── pages/          # Page components
+│   │   └── admin/      # Admin dashboard pages
+│   ├── types/          # TypeScript type definitions
+│   ├── App.tsx         # Main app component
+│   └── main.tsx        # Application entry point
+├── docs/               # Documentation
+├── public/             # Public static files
+└── dist/               # Production build output (generated)
+```
+
+## 🧪 Available Scripts
+
+| Command           | Description                              |
+| ----------------- | ---------------------------------------- |
+| `npm run dev`     | Start development server with hot reload |
+| `npm run build`   | Build for production                     |
+| `npm run preview` | Preview production build locally         |
+| `npm run lint`    | Run ESLint for code quality              |
+
+## 🔧 Technology Stack
+
+### Core
+
+- **React 18** - UI library
+- **TypeScript** - Type-safe JavaScript
+- **Vite** - Build tool and dev server
+
+### Routing & State
+
+- **React Router v6** - Client-side routing
+- **TanStack Query (React Query)** - Server state management
+
+### Styling
+
+- **TailwindCSS** - Utility-first CSS framework
+- **clsx** - Conditional className utility
+
+### HTTP & APIs
+
+- **Axios** - HTTP client with interceptors
+- **PDF.js** - PDF rendering and manipulation
+
+### UI Components
+
+- **Lucide React** - Icon library
+- **React Hook Form** - Form management
+- **Zod** - Schema validation
+
+## 🌐 API Integration
+
+The application connects to a backend API. Configure the API URL in `.env`:
+
+```bash
+VITE_API_URL=https://api.rsign.com/api
+```
+
+### API Endpoints Structure
+
+```
+/api/admin/
+├── documents/        # Document CRUD operations
+├── templates/        # Template management
+├── users/           # User management
+├── signer-groups/   # Signer group operations
+├── document-batches/# Batch operations
+└── statistics/      # Dashboard statistics
+```
+
+For detailed API documentation, see [docs/03-API-DOCUMENTATION.md](docs/03-API-DOCUMENTATION.md)
+
+## 🔐 Authentication
+
+The application uses JWT-based authentication:
+
+1. Login via `/login` page
+2. JWT token stored in localStorage
+3. Auto-redirect to login on 401 responses
+4. Protected routes with `ProtectedRoute` component
+
+## 📱 Browser Support
+
+- Chrome (latest)
+- Firefox (latest)
+- Safari (latest)
+- Edge (latest)
+
+## 🐛 Troubleshooting
+
+### Port Already in Use
+
+If port 5173 is already in use:
+
+```bash
+# Edit vite.config.ts to change port
+server: {
+  port: 3000
+}
+```
+
+### Build Errors
+
+Clear cache and reinstall:
+
+```bash
+rm -rf node_modules package-lock.json
+npm install
+```
+
+### PDF Rendering Issues
+
+Ensure PDF.js worker is properly configured in `vite.config.ts`:
+
+```typescript
+optimizeDeps: {
+    include: ["pdfjs-dist"];
+}
+```
+
+## 📄 License
+
+This project is private and proprietary.
+
+## 👥 Development Team
+
+- **Repository**: https://github.com/binhtruong9418/rsign-admin
+- **Owner**: binhtruong9418
+
+## 📚 Documentation
+
+Additional documentation available in `docs/` directory:
+
+- [API Integration Guide](docs/03-API-DOCUMENTATION.md)
+- [Frontend Types Reference](docs/FRONTEND_TYPES.md)
+- [Template API Integration](docs/FRONTEND_TEMPLATE_API_INTEGRATION.md)
+- [Document Creation Workflow](docs/ADMIN_DOCUMENT_CREATION_WORKFLOW.md)
+- [UI/UX Design Guidelines](docs/04-UI-UX-DESIGN.md)
+
+## 🚀 Quick Start Guide
+
+1. **Install dependencies**: `npm install`
+2. **Configure environment**: Create `.env` with `VITE_API_URL`
+3. **Start dev server**: `npm run dev`
+4. **Login**: Use admin credentials
+5. **Start creating**: Documents, templates, or manage users
+
+---
+
+**Version**: 2.0  
+**Last Updated**: January 2026
