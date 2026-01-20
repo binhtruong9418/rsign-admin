@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Users, Search, Edit, Trash2, UserPlus, MoreVertical } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Users, Search, Edit, Trash2, UserPlus, MoreVertical, X } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { usersAPI } from '@/lib/api';
-import { Input, Select, Pagination, PaginationInfo } from '@/components/ui';
+import { Input, Select, Pagination, PaginationInfo, Modal } from '@/components/ui';
+import { showToast } from '@/lib/toast';
 
 export default function UserManagement() {
     const [searchTerm, setSearchTerm] = useState('');
@@ -12,6 +13,19 @@ export default function UserManagement() {
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize] = useState(10);
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showStatusModal, setShowStatusModal] = useState(false);
+    const [selectedUser, setSelectedUser] = useState<any>(null);
+    const [newUserData, setNewUserData] = useState({
+        email: '',
+        password: '',
+        fullName: '',
+        phoneNumber: '',
+        role: 'USER' as 'USER' | 'ADMIN',
+    });
+    const [newStatus, setNewStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
+
+    const queryClient = useQueryClient();
 
     // Fetch users using React Query
     const { data: usersResponse, isLoading, error } = useQuery({
@@ -24,6 +38,41 @@ export default function UserManagement() {
             status: statusFilter || undefined,
             role: roleFilter || undefined,
         }),
+    });
+
+    // Create user mutation
+    const createUserMutation = useMutation({
+        mutationFn: usersAPI.createUser,
+        onSuccess: () => {
+            showToast.success('User created successfully');
+            queryClient.invalidateQueries({ queryKey: ['users'] });
+            setShowCreateModal(false);
+            setNewUserData({
+                email: '',
+                password: '',
+                fullName: '',
+                phoneNumber: '',
+                role: 'USER',
+            });
+        },
+        onError: (error: any) => {
+            showToast.error(error?.error || 'Failed to create user');
+        },
+    });
+
+    // Update status mutation
+    const updateStatusMutation = useMutation({
+        mutationFn: ({ userId, status }: { userId: string; status: 'ACTIVE' | 'INACTIVE' }) =>
+            usersAPI.updateUserStatus(userId, status),
+        onSuccess: () => {
+            showToast.success('User status updated successfully');
+            queryClient.invalidateQueries({ queryKey: ['users'] });
+            setShowStatusModal(false);
+            setSelectedUser(null);
+        },
+        onError: (error: any) => {
+            showToast.error(error?.error || 'Failed to update user status');
+        },
     });
 
     const users = usersResponse?.items || [];
@@ -53,6 +102,27 @@ export default function UserManagement() {
         setCurrentPage(1);
     };
 
+    const handleCreateUser = () => {
+        if (!newUserData.email || !newUserData.password || !newUserData.fullName) {
+            showToast.error('Email, password, and full name are required');
+            return;
+        }
+        createUserMutation.mutate(newUserData);
+    };
+
+    const handleUpdateStatus = () => {
+        if (selectedUser) {
+            updateStatusMutation.mutate({ userId: selectedUser.id, status: newStatus });
+        }
+    };
+
+    const openStatusUpdateModal = (user: any) => {
+        setSelectedUser(user);
+        setNewStatus(user.status);
+        setShowStatusModal(true);
+        setOpenMenuId(null);
+    };
+
     if (isLoading) {
         return <UserManagementSkeleton />;
     }
@@ -78,7 +148,10 @@ export default function UserManagement() {
                     </p>
                 </div>
                 <div className="mt-4 sm:mt-0">
-                    <button className="btn-primary inline-flex items-center">
+                    <button
+                        className="btn-primary inline-flex items-center"
+                        onClick={() => setShowCreateModal(true)}
+                    >
                         <UserPlus className="h-4 w-4 mr-2" />
                         Add User
                     </button>
@@ -141,6 +214,9 @@ export default function UserManagement() {
                                     User
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                                    Phone
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
                                     Role
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
@@ -182,18 +258,23 @@ export default function UserManagement() {
                                             </div>
                                         </div>
                                     </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-500">
+                                        {user.phoneNumber || '-'}
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'ADMIN'
-                                                ? 'bg-purple-100 text-purple-800'
-                                                : 'bg-blue-100 text-blue-800'
+                                            ? 'bg-purple-100 text-purple-800'
+                                            : 'bg-blue-100 text-blue-800'
                                             }`}>
                                             {user.role}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.status === 'ACTIVE'
-                                                ? 'bg-green-100 text-green-800'
-                                                : 'bg-red-100 text-red-800'
+                                            ? 'bg-green-100 text-green-800'
+                                            : user.status === 'SUSPENDED'
+                                                ? 'bg-red-100 text-red-800'
+                                                : 'bg-gray-100 text-gray-800'
                                             }`}>
                                             {user.status}
                                         </span>
@@ -206,7 +287,7 @@ export default function UserManagement() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium" onClick={(e) => e.stopPropagation()}>
                                         <div className="flex items-center justify-end space-x-3 relative">
-                                            <button 
+                                            <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     setOpenMenuId(openMenuId === user.id ? null : user.id);
@@ -220,13 +301,12 @@ export default function UserManagement() {
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            // TODO: Implement edit user
-                                                            setOpenMenuId(null);
+                                                            openStatusUpdateModal(user);
                                                         }}
                                                         className="w-full text-left px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50 flex items-center"
                                                     >
                                                         <Edit className="h-4 w-4 mr-3" />
-                                                        Edit User
+                                                        Update Status
                                                     </button>
                                                     <div className="border-t border-secondary-200 my-1"></div>
                                                     <button
@@ -271,6 +351,133 @@ export default function UserManagement() {
                     </div>
                 )}
             </div>
+
+            {/* Create User Modal */}
+            <Modal
+                isOpen={showCreateModal}
+                onClose={() => setShowCreateModal(false)}
+                title="Create New User"
+            >
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-secondary-700 mb-1">
+                            Email <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                            type="email"
+                            placeholder="user@example.com"
+                            value={newUserData.email}
+                            onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-secondary-700 mb-1">
+                            Password <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                            type="password"
+                            placeholder="••••••••"
+                            value={newUserData.password}
+                            onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-secondary-700 mb-1">
+                            Full Name <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                            placeholder="John Doe"
+                            value={newUserData.fullName}
+                            onChange={(e) => setNewUserData({ ...newUserData, fullName: e.target.value })}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-secondary-700 mb-1">
+                            Phone Number
+                        </label>
+                        <Input
+                            placeholder="0123456789"
+                            value={newUserData.phoneNumber}
+                            onChange={(e) => setNewUserData({ ...newUserData, phoneNumber: e.target.value })}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-secondary-700 mb-1">
+                            Role <span className="text-red-500">*</span>
+                        </label>
+                        <Select
+                            value={newUserData.role}
+                            onChange={(e) => setNewUserData({ ...newUserData, role: e.target.value as 'USER' | 'ADMIN' })}
+                            options={[
+                                { value: 'USER', label: 'User' },
+                                { value: 'ADMIN', label: 'Admin' },
+                            ]}
+                        />
+                    </div>
+                    <div className="flex justify-end space-x-3 pt-4">
+                        <button
+                            onClick={() => setShowCreateModal(false)}
+                            className="btn-outline"
+                            disabled={createUserMutation.isPending}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleCreateUser}
+                            className="btn-primary"
+                            disabled={createUserMutation.isPending}
+                        >
+                            {createUserMutation.isPending ? 'Creating...' : 'Create User'}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Update Status Modal */}
+            <Modal
+                isOpen={showStatusModal}
+                onClose={() => setShowStatusModal(false)}
+                title="Update User Status"
+            >
+                <div className="space-y-4">
+                    {selectedUser && (
+                        <div className="bg-secondary-50 p-4 rounded-lg">
+                            <p className="text-sm text-secondary-600">Update status for:</p>
+                            <p className="font-medium text-secondary-900">{selectedUser.fullName || selectedUser.email}</p>
+                            <p className="text-sm text-secondary-500">{selectedUser.email}</p>
+                        </div>
+                    )}
+                    <div>
+                        <label className="block text-sm font-medium text-secondary-700 mb-1">
+                            Status <span className="text-red-500">*</span>
+                        </label>
+                        <Select
+                            value={newStatus}
+                            onChange={(e) => setNewStatus(e.target.value as 'ACTIVE' | 'INACTIVE')}
+                            options={[
+                                { value: 'ACTIVE', label: 'Active - User is active' },
+                                { value: 'INACTIVE', label: 'Inactive - User is banned' },
+                            ]}
+                        />
+                    </div>
+                    <div className="flex justify-end space-x-3 pt-4">
+                        <button
+                            onClick={() => setShowStatusModal(false)}
+                            className="btn-outline"
+                            disabled={updateStatusMutation.isPending}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleUpdateStatus}
+                            className="btn-primary"
+                            disabled={updateStatusMutation.isPending}
+                        >
+                            {updateStatusMutation.isPending ? 'Updating...' : 'Update Status'}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 }

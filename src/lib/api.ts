@@ -269,6 +269,27 @@ export const usersAPI = {
         const response = await api.get(`/admin/users/${id}`);
         return response.data;
     },
+
+    createUser: async (userData: {
+        email: string;
+        password: string;
+        fullName: string;
+        phoneNumber?: string;
+        role: "USER" | "ADMIN";
+    }): Promise<User> => {
+        const response = await api.post("/admin/users", userData);
+        return response.data;
+    },
+
+    updateUserStatus: async (
+        userId: string,
+        status: "ACTIVE" | "INACTIVE" | "SUSPENDED",
+    ): Promise<User> => {
+        const response = await api.patch(`/admin/users/${userId}/status`, {
+            status,
+        });
+        return response.data;
+    },
 };
 
 // User - Signing Workflow API (for user interface, not admin)

@@ -80,6 +80,7 @@ export interface BaseEntity {
 export interface User extends BaseEntity {
     email: string;
     fullName?: string;
+    phoneNumber?: string;
     role: AppRole;
     status: UserStatus;
     authProvider?: AuthProvider;
