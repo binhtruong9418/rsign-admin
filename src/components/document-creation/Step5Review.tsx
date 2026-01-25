@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, Send, FileText, Users, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Eye } from 'lucide-react';
-import { Document, Page } from 'react-pdf';
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-import 'react-pdf/dist/Page/TextLayer.css';
+import { ArrowLeft, Check, Send, FileText, Users, Eye } from 'lucide-react';
+import { PDFViewerComplete, type Zone } from '@/components/pdf';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -29,14 +27,29 @@ export function Step5Review({ documentData, updateDocumentData, onPrevious, isEd
     const [isComplete, setIsComplete] = useState(false);
     const [batchId, setBatchId] = useState<string>('');
     const [showPdfPreview, setShowPdfPreview] = useState(false);
-    const [previewPage, setPreviewPage] = useState(1);
-    const [numPages, setNumPages] = useState<number | null>(null);
-    const [scale, setScale] = useState(1.0);
     const navigate = useNavigate();
 
     const recipientCount = documentData.type === 'INDIVIDUAL'
         ? (documentData.selectedGroup?.memberCount || documentData.recipients.length)
         : documentData.signers.length;
+
+    // Transform zones to Zone format
+    const transformedZones: Zone[] = documentData.signatureZones.map(zone => {
+        const signer = documentData.type === 'INDIVIDUAL'
+            ? { name: 'Recipient', color: '#3B82F6' }
+            : documentData.signers.find(s => s.id === zone.signerId);
+
+        return {
+            id: zone.id,
+            page: zone.page,
+            x: zone.x,
+            y: zone.y,
+            width: zone.width,
+            height: zone.height,
+            label: zone.label || signer?.name || 'Signature',
+            color: signer?.color || '#3B82F6',
+        };
+    });
 
     const handleSend = async () => {
         setIsSending(true);
@@ -407,150 +420,19 @@ export function Step5Review({ documentData, updateDocumentData, onPrevious, isEd
                 </div>
 
                 {showPdfPreview ? (
-                    <PDFErrorBoundary>
-                        <div className="space-y-4">
-                            {/* PDF Controls */}
-                            <div className="flex items-center justify-between p-3 bg-secondary-50 rounded-lg">
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setPreviewPage(Math.max(1, previewPage - 1))}
-                                        disabled={previewPage <= 1}
-                                    >
-                                        <ChevronLeft className="h-4 w-4" />
-                                    </Button>
-                                    <span className="text-sm font-medium px-3">
-                                        Page {previewPage} of {numPages || '-'}
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setPreviewPage(Math.min(numPages || 1, previewPage + 1))}
-                                        disabled={previewPage >= (numPages || 1)}
-                                    >
-                                        <ChevronRight className="h-4 w-4" />
-                                    </Button>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setScale(Math.max(0.5, scale - 0.1))}
-                                        disabled={scale <= 0.5}
-                                    >
-                                        <ZoomOut className="h-4 w-4" />
-                                    </Button>
-                                    <span className="text-sm font-medium w-16 text-center">
-                                        {Math.round(scale * 100)}%
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setScale(Math.min(1.5, scale + 0.1))}
-                                        disabled={scale >= 1.5}
-                                    >
-                                        <ZoomIn className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {/* PDF Viewer with Zones */}
-                            <div className="relative bg-secondary-100 rounded-lg overflow-auto" style={{ maxHeight: '600px' }}>
-                                <div className="flex justify-center p-4">
-                                    <div className="relative inline-block">
-                                        <Document
-                                            file={documentData.fileUrl}
-                                            onLoadSuccess={({ numPages }) => setNumPages(numPages)}
-                                            options={PDF_OPTIONS}
-                                            loading={
-                                                <div className="flex items-center justify-center h-96">
-                                                    <div className="text-center">
-                                                        <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-primary-600 border-r-transparent mb-4"></div>
-                                                        <p className="text-secondary-600 font-medium">Loading preview...</p>
-                                                    </div>
-                                                </div>
-                                            }
-                                        >
-                                            <Page
-                                                pageNumber={previewPage}
-                                                scale={scale}
-                                                renderTextLayer={false}
-                                                renderAnnotationLayer={false}
-                                            />
-                                        </Document>
-
-                                        {/* Signature Zones Overlay */}
-                                        {documentData.signatureZones
-                                            .filter(zone => zone.page === previewPage)
-                                            .map(zone => {
-                                                const signer = documentData.type === 'INDIVIDUAL'
-                                                    ? { name: 'Recipient', color: '#3B82F6' }
-                                                    : documentData.signers.find(s => s.id === zone.signerId);
-
-                                                if (!signer) return null;
-
-                                                // Note: These are approximate positions for preview
-                                                // Actual rendering will use canvas dimensions
-                                                return (
-                                                    <div
-                                                        key={zone.id}
-                                                        className="absolute border-2 border-dashed pointer-events-none"
-                                                        style={{
-                                                            borderColor: signer.color,
-                                                            backgroundColor: `${signer.color}20`,
-                                                            left: `${zone.x * scale}%`,
-                                                            top: `${zone.y * scale}%`,
-                                                            width: `${zone.width * scale}%`,
-                                                            height: `${zone.height * scale}%`,
-                                                        }}
-                                                    >
-                                                        <div
-                                                            className="text-xs px-2 py-1 text-white font-medium truncate"
-                                                            style={{ backgroundColor: signer.color }}
-                                                        >
-                                                            {signer.name}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Zones Legend for current page */}
-                            {documentData.signatureZones.filter(z => z.page === previewPage).length > 0 && (
-                                <div className="p-3 bg-secondary-50 rounded-lg">
-                                    <div className="text-xs font-medium text-secondary-700 mb-2">
-                                        Zones on this page ({documentData.signatureZones.filter(z => z.page === previewPage).length}):
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {documentData.signatureZones
-                                            .filter(z => z.page === previewPage)
-                                            .map(zone => {
-                                                const signer = documentData.type === 'INDIVIDUAL'
-                                                    ? { name: 'Recipient', color: '#3B82F6' }
-                                                    : documentData.signers.find(s => s.id === zone.signerId);
-                                                if (!signer) return null;
-                                                return (
-                                                    <div key={zone.id} className="flex items-center gap-1 px-2 py-1 bg-white rounded border border-secondary-200">
-                                                        <div className="w-3 h-3 rounded" style={{ backgroundColor: signer.color }} />
-                                                        <span className="text-xs text-secondary-700">{signer.name}</span>
-                                                        <span className="text-xs text-secondary-500">• {zone.label || 'Signature'}</span>
-                                                    </div>
-                                                );
-                                            })}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </PDFErrorBoundary>
+                    <PDFViewerComplete
+                        fileUrl={documentData.fileUrl!}
+                        zones={transformedZones}
+                        showZonesDefault={true}
+                        maxHeight="700px"
+                    />
                 ) : (
                     <div className="text-center py-8 text-secondary-500">
                         <FileText className="h-12 w-12 mx-auto mb-2 text-secondary-300" />
                         <p className="text-sm">Click "Show Preview" to view document with signature zones</p>
-                        <p className="text-xs mt-1">{documentData.signatureZones.length} signature zone{documentData.signatureZones.length > 1 ? 's' : ''} placed across {numPages || '?'} page{(numPages || 0) > 1 ? 's' : ''}</p>
+                        <p className="text-xs mt-1">
+                            {documentData.signatureZones.length} signature zone{documentData.signatureZones.length > 1 ? 's' : ''} placed
+                        </p>
                     </div>
                 )}
             </Card>

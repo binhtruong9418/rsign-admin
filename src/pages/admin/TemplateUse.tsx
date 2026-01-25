@@ -1,37 +1,40 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import {
-    ArrowLeft,
-    FileText,
-    Users,
-    Send,
-    Loader2,
-} from 'lucide-react';
+import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { templatesAPI, usersAPI, signerGroupsAPI } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
-import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { showToast } from '@/lib/toast';
-import type { User } from '@/types';
+import {
+    TemplateUseStep1,
+    TemplateUseStep2Individual,
+    TemplateUseStep2Shared,
+    TemplateUseStep3Review
+} from '@/components/template-use';
 
-interface SignerAssignment {
-    roleIndex: number;
-    roleName: string;
-    userId: string;
+interface TemplateUseData {
+    title: string;
+    deadline: string;
+    // INDIVIDUAL mode
+    selectedUserIds: string[];
+    selectedGroupId?: string;
+    // SHARED mode
+    roleAssignments: Record<string, string>;
 }
 
 export default function TemplateUse() {
     const { templateId } = useParams<{ templateId: string }>();
     const navigate = useNavigate();
 
-    const [title, setTitle] = useState('');
-    const [deadline, setDeadline] = useState('');
-    const [signerAssignments, setSignerAssignments] = useState<Record<number, string>>({});
-    const [submitting, setSubmitting] = useState(false);
-    const [selectionMode, setSelectionMode] = useState<'INDIVIDUAL' | 'GROUP'>('INDIVIDUAL');
+    const [currentStep, setCurrentStep] = useState(1);
+    const [data, setData] = useState<TemplateUseData>({
+        title: '',
+        deadline: '',
+        selectedUserIds: [],
+        selectedGroupId: undefined,
+        roleAssignments: {}
+    });
 
     // Fetch template details
     const { data: templateResponse, isLoading: templateLoading } = useQuery({
@@ -56,80 +59,78 @@ export default function TemplateUse() {
     const groups = groupsData?.items || [];
     const template = templateResponse?.template;
 
-    const handleAssignmentChange = (roleIndex: number, userId: string) => {
-        setSignerAssignments(prev => ({
-            ...prev,
-            [roleIndex]: userId
-        }));
+    const updateData = (updates: Partial<TemplateUseData>) => {
+        setData(prev => ({ ...prev, ...updates }));
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (!title.trim()) {
-            showToast.error('Please enter a document title');
-            return;
-        }
-
+    const handleSubmit = async (sendImmediately: boolean) => {
         if (!template) {
             showToast.error('Template not loaded');
             return;
         }
 
-        // Validate all signers are assigned
-        const requiredAssignments = template.signers?.length || 0;
-        const completedAssignments = Object.keys(signerAssignments).length;
-
-        if (completedAssignments < requiredAssignments) {
-            showToast.error('Please assign all signer roles');
-            return;
-        }
-
-        setSubmitting(true);
-
         try {
-            // Build request based on template structure
+            const isIndividualMode = template.signingMode === 'INDIVIDUAL';
+
+            // Build request based on mode
             const request: any = {
-                title: title.trim(),
-                deadline: deadline || undefined,
+                templateId: templateId!,
+                title: data.title || template.name,
+                deadline: data.deadline || undefined,
+                sendImmediately
             };
 
-            if (template.signingMode === 'INDIVIDUAL') {
-                // For INDIVIDUAL mode, pass recipientIds
-                const recipientIds = Object.values(signerAssignments);
-                request.recipientIds = recipientIds;
+            if (isIndividualMode) {
+                // INDIVIDUAL mode - Simple API
+                request.recipients = {};
+
+                if (data.selectedGroupId) {
+                    request.recipients.signerGroupId = data.selectedGroupId;
+                } else {
+                    request.recipients.userIds = data.selectedUserIds;
+                }
             } else {
-                // For SHARED mode, pass signers with role mapping
-                request.signers = template.signers?.map((signer: any, index: number) => ({
-                    userId: signerAssignments[index],
-                }));
+                // SHARED mode - Detailed API
+                // Build signingSteps from template structure and role assignments
+                request.signingSteps = template.signingSteps?.map((step: any) => ({
+                    stepOrder: step.stepNumber,
+                    signers: step.signers.map((signer: any) => {
+                        const userId = data.roleAssignments[signer.role];
+                        return {
+                            userId,
+                            zoneIndex: signer.zoneIndex
+                        };
+                    })
+                })) || [];
             }
 
-            const createPromise = templatesAPI.createDocumentFromTemplate({
-                templateId: templateId!,
-                ...request
-            });
+            const createPromise = templatesAPI.createDocumentFromTemplate(request);
 
             showToast.promise(
                 createPromise,
                 {
-                    loading: 'Creating document from template...',
-                    success: 'Document created successfully!',
+                    loading: `Creating ${isIndividualMode ? 'documents' : 'document'}...`,
+                    success: `${isIndividualMode ? 'Documents' : 'Document'} created successfully!`,
                     error: (err) => err?.error || 'Failed to create document'
                 }
             );
 
             const result = await createPromise;
-            // Navigate to document or batch based on response
-            if (result.document?.id) {
+
+            // Navigate based on response structure
+            if (result.batchId) {
+                // INDIVIDUAL mode → Navigate to batch list
+                navigate('/admin/document-batches');
+            } else if (result.document?.id) {
+                // SHARED mode → Navigate to document detail
                 navigate(`/admin/documents/${result.document.id}`);
-            } else if (result.batchId) {
-                navigate(`/admin/document-batches`);
+            } else {
+                // Fallback
+                navigate('/admin/documents');
             }
         } catch (error: any) {
             console.error('Failed to create document:', error);
-        } finally {
-            setSubmitting(false);
+            // Toast already shown by promise
         }
     };
 
@@ -137,7 +138,7 @@ export default function TemplateUse() {
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="text-center">
-                    <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-primary-600 border-r-transparent mb-4"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
                     <p className="text-secondary-600">Loading template...</p>
                 </div>
             </div>
@@ -146,236 +147,148 @@ export default function TemplateUse() {
 
     if (!template) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="text-center">
-                    <p className="text-red-600 mb-4">Template not found</p>
-                    <Button onClick={() => navigate('/admin/templates')}>
-                        <ArrowLeft className="h-4 w-4 mr-2" />
-                        Back to Templates
-                    </Button>
-                </div>
+            <div className="text-center py-12">
+                <p className="text-red-600">Template not found</p>
+                <Button
+                    variant="outline"
+                    onClick={() => navigate('/admin/templates')}
+                    className="mt-4"
+                >
+                    Back to Templates
+                </Button>
             </div>
         );
     }
 
+    const isIndividualMode = template.signingMode === 'INDIVIDUAL';
+    const totalSteps = 3;
+
     return (
-        <div className="min-h-screen bg-secondary-50 py-8">
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-                {/* Header */}
-                <div className="mb-8">
-                    <button
-                        onClick={() => navigate(`/admin/templates/${templateId}`)}
-                        className="flex items-center text-sm text-secondary-600 hover:text-secondary-900 mb-4"
-                    >
-                        <ArrowLeft className="h-4 w-4 mr-2" />
-                        Back to Template
-                    </button>
-                    <h1 className="text-3xl font-bold text-secondary-900">
-                        Create Document from Template
-                    </h1>
-                    <p className="text-secondary-600 mt-2">
-                        Using template: <strong>{template.name}</strong>
-                    </p>
-                </div>
+        <div className="max-w-4xl mx-auto">
+            {/* Header */}
+            <div className="mb-6">
+                <Button
+                    variant="ghost"
+                    onClick={() => navigate('/admin/templates')}
+                    className="mb-4"
+                >
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Back to Templates
+                </Button>
 
-                {/* Template Info */}
-                <Card className="p-6 mb-6 bg-primary-50 border-primary-200">
-                    <h3 className="font-semibold text-secondary-900 mb-4 flex items-center">
-                        <FileText className="h-5 w-5 mr-2" />
-                        Template Structure
-                    </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                            <span className="text-secondary-600 block mb-1">Signing Mode</span>
-                            <Badge variant="default">
-                                {template.signingMode === 'INDIVIDUAL' ? 'Individual' : 'Shared'}
-                            </Badge>
-                        </div>
-                        {template.signingMode === 'SHARED' && (
-                            <div>
-                                <span className="text-secondary-600 block mb-1">Signing Flow</span>
-                                <Badge variant="secondary">
-                                    {template.signingFlow === 'PARALLEL' ? 'Parallel' : 'Sequential'}
-                                </Badge>
-                            </div>
-                        )}
-                        <div>
-                            <span className="text-secondary-600 block mb-1">Signer Roles</span>
-                            <p className="font-medium text-secondary-900">
-                                {template.signers?.length || 0}
-                            </p>
-                        </div>
-                        <div>
-                            <span className="text-secondary-600 block mb-1">Signature Zones</span>
-                            <p className="font-medium text-secondary-900">
-                                {template.signatureZones?.length || 0}
-                            </p>
-                        </div>
-                    </div>
-                </Card>
-
-                {/* Form */}
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Document Details */}
-                    <Card className="p-6">
-                        <h3 className="font-semibold text-secondary-900 mb-4">
-                            Document Details
-                        </h3>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-secondary-700 mb-2">
-                                    Document Title *
-                                </label>
-                                <Input
-                                    type="text"
-                                    value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                    placeholder="e.g., Employment Contract - John Doe"
-                                    required
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-secondary-700 mb-2">
-                                    Deadline (Optional)
-                                </label>
-                                <Input
-                                    type="datetime-local"
-                                    value={deadline}
-                                    onChange={(e) => setDeadline(e.target.value)}
-                                />
-                            </div>
-                        </div>
-                    </Card>
-
-                    {/* Signer Assignments */}
-                    <Card className="p-6">
-                        <h3 className="font-semibold text-secondary-900 mb-4 flex items-center">
-                            <Users className="h-5 w-5 mr-2" />
-                            Assign {template.signingMode === 'INDIVIDUAL' ? 'Recipients' : 'Signers'}
-                        </h3>
-
-                        {template.signingMode === 'INDIVIDUAL' ? (
-                            <div className="space-y-4">
-                                <p className="text-sm text-secondary-600">
-                                    Select users who will receive individual copies of this document.
-                                </p>
-                                {template.signers?.map((signer: any, index: number) => (
-                                    <div key={index}>
-                                        <label className="block text-sm font-medium text-secondary-700 mb-2">
-                                            {signer.role} {signer.description && `(${signer.description})`}
-                                        </label>
-                                        <Select
-                                            value={signerAssignments[index] || ''}
-                                            onChange={(e) => handleAssignmentChange(index, e.target.value)}
-                                            required
-                                            placeholder="Select users"
-                                            options={users.map((user: User) => ({
-                                                value: user.id,
-                                                label: `${user.fullName} (${user.email})`,
-                                            }))}
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        ) : template.signingFlow === 'PARALLEL' ? (
-                            <div className="space-y-4">
-                                <p className="text-sm text-secondary-600">
-                                    All signers will receive the document at the same time.
-                                </p>
-                                {template.signers?.map((signer: any, index: number) => (
-                                    <div key={index} className="flex items-start gap-3">
-                                        <div className="w-8 h-8 rounded flex items-center justify-center text-white font-medium flex-shrink-0 mt-7"
-                                            style={{ backgroundColor: signer.color }}>
-                                            {index + 1}
-                                        </div>
-                                        <div className="flex-1">
-                                            <label className="block text-sm font-medium text-secondary-700 mb-2">
-                                                {signer.role} {signer.description && `(${signer.description})`}
-                                            </label>
-                                            <Select
-                                                value={signerAssignments[index] || ''}
-                                                onChange={(e) => handleAssignmentChange(index, e.target.value)}
-                                                required
-                                                placeholder="Select user"
-                                                options={users.map((user: User) => ({
-                                                    value: user.id,
-                                                    label: `${user.fullName} (${user.email})`,
-                                                }))}
-                                            />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="space-y-6">
-                                <p className="text-sm text-secondary-600">
-                                    Signers must sign in sequential order. Each step must be completed before the next begins.
-                                </p>
-                                {template.signingSteps?.map((step: any, stepIndex: number) => (
-                                    <Card key={stepIndex} className="p-4 border border-secondary-200">
-                                        <div className="font-medium text-secondary-900 mb-3">
-                                            Step {step.stepNumber}
-                                        </div>
-                                        <div className="space-y-3">
-                                            {step.signers.map((signer: any, signerIndex: number) => {
-                                                const globalIndex = template.signers?.findIndex((s: any) => s.role === signer.role) || 0;
-                                                return (
-                                                    <div key={signerIndex} className="flex items-start gap-3">
-                                                        <div className="w-6 h-6 rounded flex items-center justify-center text-white text-sm font-medium flex-shrink-0 mt-7"
-                                                            style={{ backgroundColor: signer.color }}>
-                                                            {signerIndex + 1}
-                                                        </div>
-                                                        <div className="flex-1">
-                                                            <label className="block text-sm font-medium text-secondary-700 mb-2">
-                                                                {signer.role} {signer.description && `(${signer.description})`}
-                                                            </label>
-                                                            <Select
-                                                                value={signerAssignments[globalIndex] || ''}
-                                                                onChange={(e) => handleAssignmentChange(globalIndex, e.target.value)}
-                                                                required
-                                                                placeholder="Select user"
-                                                                options={users.map((user: User) => ({
-                                                                    value: user.id,
-                                                                    label: `${user.fullName} (${user.email})`,
-                                                                }))}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </Card>
-                                ))}
-                            </div>
-                        )}
-                    </Card>
-
-                    {/* Actions */}
-                    <div className="flex items-center justify-between">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => navigate(`/admin/templates/${templateId}`)}
-                        >
-                            Cancel
-                        </Button>
-                        <Button type="submit" disabled={submitting}>
-                            {submitting ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Creating Document...
-                                </>
-                            ) : (
-                                <>
-                                    <Send className="h-4 w-4 mr-2" />
-                                    Create Document
-                                </>
-                            )}
-                        </Button>
-                    </div>
-                </form>
+                <h1 className="text-2xl font-bold text-secondary-900">
+                    Use Template: {template.name}
+                </h1>
+                <p className="text-secondary-600 mt-1">
+                    Create {isIndividualMode ? 'documents' : 'a document'} from this template
+                </p>
             </div>
+
+            {/* Progress Indicator */}
+            <Card className="p-6 mb-6">
+                <div className="flex items-center justify-between">
+                    {[1, 2, 3].map((step) => (
+                        <div key={step} className="flex items-center flex-1">
+                            <div className="flex items-center">
+                                <div
+                                    className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all ${step < currentStep
+                                            ? 'bg-green-100 text-green-700'
+                                            : step === currentStep
+                                                ? 'bg-primary-600 text-white'
+                                                : 'bg-secondary-200 text-secondary-500'
+                                        }`}
+                                >
+                                    {step < currentStep ? (
+                                        <CheckCircle2 className="h-5 w-5" />
+                                    ) : (
+                                        step
+                                    )}
+                                </div>
+                                <div className="ml-3">
+                                    <p
+                                        className={`text-sm font-medium ${step <= currentStep
+                                                ? 'text-secondary-900'
+                                                : 'text-secondary-500'
+                                            }`}
+                                    >
+                                        {step === 1 && 'Overview'}
+                                        {step === 2 && (isIndividualMode ? 'Recipients' : 'Signers')}
+                                        {step === 3 && 'Review'}
+                                    </p>
+                                </div>
+                            </div>
+                            {step < totalSteps && (
+                                <div
+                                    className={`flex-1 h-1 mx-4 rounded ${step < currentStep
+                                            ? 'bg-green-500'
+                                            : 'bg-secondary-200'
+                                        }`}
+                                />
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </Card>
+
+            {/* Step Content */}
+            <Card className="p-6">
+                {currentStep === 1 && (
+                    <TemplateUseStep1
+                        template={template}
+                        title={data.title}
+                        deadline={data.deadline}
+                        onTitleChange={(title) => updateData({ title })}
+                        onDeadlineChange={(deadline) => updateData({ deadline })}
+                        onNext={() => setCurrentStep(2)}
+                    />
+                )}
+
+                {currentStep === 2 && isIndividualMode && (
+                    <TemplateUseStep2Individual
+                        users={users}
+                        groups={groups}
+                        selectedUserIds={data.selectedUserIds}
+                        selectedGroupId={data.selectedGroupId}
+                        onUserSelectionChange={(userIds) => updateData({ selectedUserIds: userIds })}
+                        onGroupSelectionChange={(groupId) => updateData({ selectedGroupId: groupId })}
+                        onNext={() => setCurrentStep(3)}
+                        onPrevious={() => setCurrentStep(1)}
+                    />
+                )}
+
+                {currentStep === 2 && !isIndividualMode && (
+                    <TemplateUseStep2Shared
+                        template={template}
+                        users={users}
+                        roleAssignments={data.roleAssignments}
+                        onRoleAssignmentChange={(role, userId) => {
+                            updateData({
+                                roleAssignments: {
+                                    ...data.roleAssignments,
+                                    [role]: userId
+                                }
+                            });
+                        }}
+                        onNext={() => setCurrentStep(3)}
+                        onPrevious={() => setCurrentStep(1)}
+                    />
+                )}
+
+                {currentStep === 3 && (
+                    <TemplateUseStep3Review
+                        template={template}
+                        title={data.title}
+                        deadline={data.deadline}
+                        selectedUserIds={data.selectedUserIds}
+                        selectedGroupId={data.selectedGroupId}
+                        roleAssignments={data.roleAssignments}
+                        users={users}
+                        groups={groups}
+                        onPrevious={() => setCurrentStep(2)}
+                        onSubmit={handleSubmit}
+                    />
+                )}
+            </Card>
         </div>
     );
 }

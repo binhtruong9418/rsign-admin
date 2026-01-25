@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Document, Page } from 'react-pdf';
+import { PDFViewerComplete, type Zone } from '@/components/pdf';
 import { storage } from "@/lib/utils";
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -249,19 +249,21 @@ export default function DocumentDetailNew() {
 
 // Overview Tab Component
 function OverviewTab({ document, files, progress, timeline, signers, steps, zones }: any) {
-    const [numPages, setNumPages] = useState<number | null>(null);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [scale, setScale] = useState(1.0);
-    const [showSignatureZones, setShowSignatureZones] = useState(false);
-
-    const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
-        setNumPages(numPages);
-    };
-
     const previewFile = files.signed || files.original;
-    const isSignedPreview = Boolean(files.signed);
-    const hasZones = (zones || []).length > 0;
-    const pageZones = (zones || []).filter((zone: any) => zone.page === currentPage && zone.position);
+
+    // Transform zones to Zone format
+    const transformedZones: Zone[] = (zones || [])
+        .filter((zone: any) => zone.position)
+        .map((zone: any) => ({
+            id: zone.id,
+            page: zone.page,
+            x: zone.position.x,
+            y: zone.position.y,
+            width: zone.position.w,
+            height: zone.position.h,
+            label: zone.label || zone.signer?.user?.fullName || 'Signature',
+            color: '#2563eb',
+        }));
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -272,99 +274,12 @@ function OverviewTab({ document, files, progress, timeline, signers, steps, zone
                         <h3 className="text-lg font-semibold text-secondary-900">Document Preview</h3>
                     </div>
                     <div className="p-6">
-                        <div className="space-y-4">
-                            {/* PDF Controls */}
-                            <div className="flex items-center justify-between bg-secondary-50 p-3 rounded-lg">
-                                <div className="flex items-center space-x-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                        disabled={currentPage <= 1}
-                                    >
-                                        <ChevronLeft className="h-4 w-4" />
-                                    </Button>
-                                    <span className="text-sm text-secondary-700">
-                                        Page {currentPage} of {numPages || '...'}
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setCurrentPage(prev => Math.min(numPages || 1, prev + 1))}
-                                        disabled={currentPage >= (numPages || 1)}
-                                    >
-                                        <ChevronRight className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setScale(prev => Math.max(0.5, prev - 0.1))}
-                                    >
-                                        <ZoomOut className="h-4 w-4" />
-                                    </Button>
-                                    <span className="text-sm text-secondary-700">{Math.round(scale * 100)}%</span>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setScale(prev => Math.min(2, prev + 0.1))}
-                                    >
-                                        <ZoomIn className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                        variant={showSignatureZones ? 'primary' : 'outline'}
-                                        size="sm"
-                                        onClick={() => setShowSignatureZones(prev => !prev)}
-                                        disabled={!hasZones}
-                                    >
-                                        <Eye className="h-4 w-4 mr-2" />
-                                        {showSignatureZones ? 'Hide Zones' : 'Show Zones'}
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {/* PDF Document */}
-                            <div className="border border-secondary-200 rounded-lg overflow-auto max-h-[600px] bg-secondary-50">
-                                <div className="flex justify-center p-4">
-                                    <div className="relative inline-block">
-                                        <Document
-                                            file={previewFile}
-                                            onLoadSuccess={onDocumentLoadSuccess}
-                                            loading={<div className="p-8 text-center text-secondary-600">Loading PDF...</div>}
-                                            error={<div className="p-8 text-center text-red-600">Failed to load PDF</div>}
-                                        >
-                                            <Page
-                                                pageNumber={currentPage}
-                                                scale={scale}
-                                                renderTextLayer={true}
-                                                renderAnnotationLayer={false}
-                                            />
-                                        </Document>
-
-                                        {showSignatureZones && pageZones.map((zone: any) => (
-                                            <div
-                                                key={zone.id}
-                                                className={cn(
-                                                    "absolute border-2 border-dashed border-primary-500 pointer-events-none",
-                                                    isSignedPreview ? "bg-primary-500/5" : "bg-primary-500/10"
-                                                )}
-                                                style={{
-                                                    left: `${zone.position.x}%`,
-                                                    top: `${zone.position.y}%`,
-                                                    width: `${zone.position.w}%`,
-                                                    height: `${zone.position.h}%`,
-                                                }}
-                                            >
-                                                <div className="absolute left-0 top-0 bg-primary-600 text-white text-[10px] px-1 py-0.5 rounded-br">
-                                                    {zone.label || zone.signer?.user?.fullName || 'Signature'}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <PDFViewerComplete
+                            fileUrl={previewFile}
+                            zones={transformedZones}
+                            showZonesDefault={false}
+                            maxHeight="700px"
+                        />
                     </div>
                 </Card>
             </div>
