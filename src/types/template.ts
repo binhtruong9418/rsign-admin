@@ -156,14 +156,22 @@ export function buildCreateTemplateRequest(
         signingMode: data.signingMode,
         signingFlow: data.signingFlow,
         description: data.description,
-        signatureZones: data.signatureZones.map((zone) => ({
-            pageNumber: zone.page,
-            x: parseFloat(zone.x.toFixed(2)),
-            y: parseFloat(zone.y.toFixed(2)),
-            width: parseFloat(zone.width.toFixed(2)),
-            height: parseFloat(zone.height.toFixed(2)),
-            label: zone.label,
-        })),
+        signatureZones: data.signatureZones.map((zone) => {
+            // Find the signer for this zone to use their role as fallback label
+            const signerIndex = parseInt(zone.signerId.replace('signer-', ''));
+            const signer = data.signers[signerIndex];
+            const label = zone.label || signer?.role || `Signer ${signerIndex + 1}`;
+            
+            return {
+                id: zone.id?.includes('zone-') ? undefined : zone.id, // Don't send temp IDs
+                pageNumber: zone.page,
+                x: parseFloat(zone.x.toFixed(2)),
+                y: parseFloat(zone.y.toFixed(2)),
+                width: parseFloat(zone.width.toFixed(2)),
+                height: parseFloat(zone.height.toFixed(2)),
+                label: label,
+            };
+        }),
         signingSteps: [],
     };
 
@@ -183,8 +191,8 @@ export function buildCreateTemplateRequest(
             request.signingSteps = [
                 {
                     stepOrder: 1,
-                    signerCount: data.signers.length,
-                    zoneIndices: data.signatureZones.map((_, index) => index),
+                    signerCount: data.signers.length, // Number of unique roles
+                    zoneIndices: data.signatureZones.map((_, index) => index), // All zones
                 },
             ];
         } else {
@@ -207,13 +215,22 @@ export function buildCreateTemplateRequest(
                     });
                 });
 
+                // Calculate unique signers for this step
+                const uniqueSignerIds = new Set<string>();
+                step.signers.forEach((signer) => {
+                     const globalSignerIndex = data.signers.findIndex(
+                        (s) => s.role === signer.role && s.order === signer.order,
+                    );
+                    uniqueSignerIds.add(`signer-${globalSignerIndex}`);
+                });
+
                 return {
                     stepOrder: step.stepNumber,
-                    signerCount: step.signers.length,
+                    signerCount: uniqueSignerIds.size, // Count unique signers in this step
                     zoneIndices:
                         zoneIndices.length > 0
                             ? zoneIndices
-                            : data.signatureZones.map((_, index) => index),
+                            : [], // Should only include relevant zones
                 };
             });
         }
@@ -237,14 +254,22 @@ export function buildUpdateTemplateRequest(
     if (data.description !== undefined) request.description = data.description;
 
     if (data.signatureZones) {
-        request.signatureZones = data.signatureZones.map((zone) => ({
-            pageNumber: zone.page,
-            x: parseFloat(zone.x.toFixed(2)),
-            y: parseFloat(zone.y.toFixed(2)),
-            width: parseFloat(zone.width.toFixed(2)),
-            height: parseFloat(zone.height.toFixed(2)),
-            label: zone.label,
-        }));
+        request.signatureZones = data.signatureZones.map((zone) => {
+            // Find the signer for this zone to use their role as fallback label
+            const signerIndex = parseInt(zone.signerId.replace('signer-', ''));
+            const signer = data.signers[signerIndex];
+            const label = zone.label || signer?.role || `Signer ${signerIndex + 1}`;
+            
+            return {
+                id: zone.id?.includes('zone-') ? undefined : zone.id,
+                pageNumber: zone.page,
+                x: parseFloat(zone.x.toFixed(2)),
+                y: parseFloat(zone.y.toFixed(2)),
+                width: parseFloat(zone.width.toFixed(2)),
+                height: parseFloat(zone.height.toFixed(2)),
+                label: label,
+            };
+        });
     }
 
     // Build signing steps based on mode
@@ -260,19 +285,21 @@ export function buildUpdateTemplateRequest(
         request.signingSteps = [
             {
                 stepOrder: 1,
-                signerCount: data.signers.length,
+                signerCount: data.signers.length, // Unique roles count
                 zoneIndices: data.signatureZones.map((_, index) => index),
             },
         ];
     } else {
         request.signingSteps = data.signingSteps.map((step) => {
             const zoneIndices: number[] = [];
+            const uniqueSignerIds = new Set<string>();
 
             step.signers.forEach((signer) => {
                 const globalSignerIndex = data.signers.findIndex(
                     (s) => s.role === signer.role && s.order === signer.order,
                 );
                 const signerId = `signer-${globalSignerIndex}`;
+                uniqueSignerIds.add(signerId);
 
                 data.signatureZones.forEach((zone, zoneIdx) => {
                     if (zone.signerId === signerId) {
@@ -283,11 +310,8 @@ export function buildUpdateTemplateRequest(
 
             return {
                 stepOrder: step.stepNumber,
-                signerCount: step.signers.length,
-                zoneIndices:
-                    zoneIndices.length > 0
-                        ? zoneIndices
-                        : data.signatureZones.map((_, index) => index),
+                signerCount: uniqueSignerIds.size, // Unique signers in step
+                zoneIndices: zoneIndices
             };
         });
     }

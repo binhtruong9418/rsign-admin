@@ -21,18 +21,18 @@ export function Step4ZonesContent({ templateData, updateTemplateData, onNext, on
         recipients: [],
         signingFlow: templateData.signingFlow,
         notifications: { onComplete: false, reminder: false, dailyReport: false },
-        signers: templateData.signers.map((signer: TemplateSignerPlaceholder, index: number): Signer => ({
+        signers: (templateData.signers || []).map((signer: TemplateSignerPlaceholder, index: number): Signer => ({
             id: `signer-${index}`,
             userId: '',
             name: signer.role, // Use role name as the signer name for display
             email: signer.description || '', // Use description in email field for display
             color: signer.color,
         })),
-        signingSteps: templateData.signingSteps.map((step, idx) => ({
+        signingSteps: (templateData.signingSteps || []).map((step, idx) => ({
             stepNumber: idx + 1,
             stepOrder: step.stepNumber,
             signerIds: [],
-            signers: step.signers.map((signer: TemplateSignerPlaceholder, index: number): Signer => ({
+            signers: (step.signers || []).map((signer: TemplateSignerPlaceholder, index: number): Signer => ({
                 id: `step-${step.stepNumber}-signer-${index}`,
                 userId: '',
                 name: signer.role,
@@ -40,8 +40,8 @@ export function Step4ZonesContent({ templateData, updateTemplateData, onNext, on
                 color: signer.color,
             })),
         })),
-        signatureZones: templateData.signatureZones,
-        pageDimensions: templateData.pageDimensions,
+        signatureZones: templateData.signatureZones || [],
+        pageDimensions: templateData.pageDimensions || new Map(),
     };
 
     const handleUpdateDocumentData = (updates: Partial<DocumentData>) => {

@@ -13,7 +13,7 @@ import SignerGroups from '@/pages/admin/SignerGroups';
 import SignerGroupDetail from '@/pages/admin/SignerGroupDetail';
 import UserManagement from '@/pages/admin/UserManagement';
 import TemplateList from '@/pages/admin/TemplateList';
-import TemplateCreate from '@/pages/admin/TemplateCreate';
+import TemplateCreateOrEdit from '@/pages/admin/TemplateCreateOrEdit';
 import TemplateDetail from '@/pages/admin/TemplateDetail';
 import TemplateUse from '@/pages/admin/TemplateUse';
 
@@ -40,9 +40,9 @@ function App() {
                     <Route path="documents/batch/:batchId" element={<DocumentList />} />
                     <Route path="document-batches" element={<DocumentBatches />} />
                     <Route path="templates" element={<TemplateList />} />
-                    <Route path="templates/create" element={<TemplateCreate />} />
+                    <Route path="templates/create" element={<TemplateCreateOrEdit />} />
                     <Route path="templates/:templateId" element={<TemplateDetail />} />
-                    <Route path="templates/:templateId/edit" element={<TemplateCreate />} />
+                    <Route path="templates/:templateId/edit" element={<TemplateCreateOrEdit />} />
                     <Route path="templates/:templateId/use" element={<TemplateUse />} />
                     <Route path="users" element={<UserManagement />} />
                     <Route path="signer-groups" element={<SignerGroups />} />

@@ -14,23 +14,14 @@ import {
 } from "lucide-react";
 import { cn, formatDate, getStatusColor, getStatusLabel } from "@/lib/utils";
 import { statisticsAPI } from "@/lib/api";
-import type { DashboardStatistics, TimeSeriesData } from "@/types";
+import type { DashboardStatistics } from "@/types";
 
-const DEFAULT_TIME_SERIES_DAYS = 14;
 const REFRESH_INTERVAL_MS = 60000;
 
 export default function Dashboard() {
     const { data: stats, isLoading, isError } = useQuery({
         queryKey: ["admin-statistics-dashboard"],
         queryFn: statisticsAPI.getDashboardStatistics,
-        staleTime: REFRESH_INTERVAL_MS,
-        refetchInterval: REFRESH_INTERVAL_MS,
-    });
-
-    const { data: timeSeries } = useQuery({
-        queryKey: ["admin-statistics-time-series", DEFAULT_TIME_SERIES_DAYS],
-        queryFn: () => statisticsAPI.getTimeSeries(DEFAULT_TIME_SERIES_DAYS),
-        enabled: !!stats,
         staleTime: REFRESH_INTERVAL_MS,
         refetchInterval: REFRESH_INTERVAL_MS,
     });
@@ -196,10 +187,8 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                <ActivityTrendCard data={timeSeries} />
-                <RecentActivityCard data={stats.recentActivity} />
-            </div>
+            {/* Recent Activity - Full width */}
+            <RecentActivityCard data={stats.recentActivity} />
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 <MostActiveUsersCard data={stats.topMetrics.mostActiveUsers} />
@@ -301,63 +290,6 @@ function MetricRow({
     );
 }
 
-function ActivityTrendCard({ data }: { data?: TimeSeriesData[] }) {
-    const series = data ?? [];
-    const maxCreated = Math.max(
-        1,
-        ...series.map((item) => item.documentsCreated)
-    );
-
-    return (
-        <div className="card p-6">
-            <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-secondary-900">
-                    Activity Trends
-                </h3>
-                <span className="text-xs text-secondary-500">
-                    Last {DEFAULT_TIME_SERIES_DAYS} days
-                </span>
-            </div>
-            {series.length === 0 ? (
-                <p className="mt-6 text-sm text-secondary-600">
-                    No activity data available yet.
-                </p>
-            ) : (
-                <div className="mt-6">
-                    <div className="grid grid-cols-7 sm:grid-cols-14 gap-2 items-end h-32">
-                        {series.map((item) => {
-                            const height = Math.max(
-                                8,
-                                Math.round(
-                                    (item.documentsCreated / maxCreated) * 100
-                                )
-                            );
-                            return (
-                                <div
-                                    key={item.date}
-                                    className="flex flex-col items-center gap-2"
-                                >
-                                    <div
-                                        className="w-2.5 sm:w-3 rounded-full bg-primary-500/80"
-                                        style={{ height: `${height}%` }}
-                                    />
-                                    <span className="text-[10px] text-secondary-500">
-                                        {item.date.slice(5)}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                    <div className="mt-4 flex items-center justify-between text-xs text-secondary-500">
-                        <span>Documents created</span>
-                        <span>Peak {maxCreated} / day</span>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
-
 function RecentActivityCard({
     data,
 }: {
@@ -370,40 +302,42 @@ function RecentActivityCard({
     ];
 
     return (
-        <div className="card p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-secondary-900">
+        <div className="card p-6">
+            <h3 className="text-lg font-semibold text-secondary-900 mb-4">
                 Recent Activity
             </h3>
-            {items.map((item) => (
-                <div
-                    key={item.label}
-                    className="rounded-xl border border-secondary-200 p-4 space-y-2"
-                >
-                    <div className="text-sm font-semibold text-secondary-700">
-                        {item.label}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {items.map((item) => (
+                    <div
+                        key={item.label}
+                        className="rounded-xl border border-secondary-200 p-5 space-y-3 hover:border-primary-300 transition-colors"
+                    >
+                        <div className="text-sm font-semibold text-secondary-700">
+                            {item.label}
+                        </div>
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="space-y-1">
+                                <span className="text-xs text-secondary-500">Created</span>
+                                <p className="text-2xl font-bold text-secondary-900">
+                                    {item.value.documentsCreated}
+                                </p>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-xs text-secondary-500">Signed</span>
+                                <p className="text-2xl font-bold text-green-600">
+                                    {item.value.documentsSigned}
+                                </p>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-xs text-secondary-500">New users</span>
+                                <p className="text-2xl font-bold text-blue-600">
+                                    {item.value.newUsers}
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-3 text-xs text-secondary-600">
-                        <div className="space-y-1">
-                            <span className="text-secondary-500">Created</span>
-                            <p className="text-sm font-semibold text-secondary-900">
-                                {item.value.documentsCreated}
-                            </p>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="text-secondary-500">Signed</span>
-                            <p className="text-sm font-semibold text-secondary-900">
-                                {item.value.documentsSigned}
-                            </p>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="text-secondary-500">New users</span>
-                            <p className="text-sm font-semibold text-secondary-900">
-                                {item.value.newUsers}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            ))}
+                ))}
+            </div>
         </div>
     );
 }

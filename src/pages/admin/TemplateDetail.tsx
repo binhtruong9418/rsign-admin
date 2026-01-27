@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { PDFViewerComplete, type Zone } from '@/components/pdf';
 import { showToast } from '@/lib/toast';
 import { templatesAPI } from '@/lib/api';
 import { useState } from 'react';
@@ -99,14 +100,79 @@ export default function TemplateDetail() {
         );
     }
 
-    const tmpl = template.template;
-    const zonesCount = tmpl.signatureZones?.length || 0;
-    const zonesPerSigner = tmpl.signers?.reduce((acc: Record<string, number>, signer: any, index: number) => {
-        const signerId = `signer-${index}`;
-        const count = tmpl.signatureZones?.filter((zone: any) => zone.signerId === signerId).length || 0;
+    const originalTmpl = template.template;
+
+    // Recover Signers if missing (same logic as TemplateCreate)
+    let restoredSigners: any[] = originalTmpl.signers || [];
+    const rawZones = originalTmpl.signatureZones || [];
+
+    if (originalTmpl.signingMode === 'SHARED' && restoredSigners.length === 0 && rawZones.length > 0) {
+        const labelMap = new Map<string, number>();
+        let signerCount = 0;
+
+        rawZones.forEach((z: any) => {
+            if (z.label && !labelMap.has(z.label)) {
+                labelMap.set(z.label, signerCount++);
+            }
+        });
+
+        if (signerCount > 0) {
+            restoredSigners = Array.from(labelMap.entries()).map(([label, index]) => ({
+                role: label,
+                description: '',
+                order: index + 1,
+                color: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'][index % 5]
+            }));
+        } else {
+            restoredSigners = [{ role: 'Signer 1', description: '', order: 1, color: '#3B82F6' }];
+        }
+    } else if (originalTmpl.signingMode === 'INDIVIDUAL' && restoredSigners.length === 0) {
+        restoredSigners = [{ role: 'Signer', description: '', order: 1, color: '#3B82F6' }];
+    }
+
+    // Shadow tmpl with enhanced data
+    const tmpl = { ...originalTmpl, signers: restoredSigners };
+    const signers = restoredSigners;
+    const zonesCount = rawZones.length;
+
+    // Calculate zones per signer safely
+    const zonesPerSigner = signers.reduce((acc: Record<string, number>, signer: any, index: number) => {
+        // Count zones that match this signer's role (via label)
+        const count = rawZones.filter((zone: any) => {
+            if (zone.label === signer.role) return true;
+            if (tmpl.signingMode === 'INDIVIDUAL') return true;
+            return false;
+        }).length;
+
         acc[signer.role] = count;
         return acc;
-    }, {} as Record<string, number>) || {};
+    }, {}) || {};
+
+    // Transform zones to Zone format with recovery logic
+    const transformedZones: Zone[] = rawZones.map((zone: any, index: number) => {
+        let signerIndex = 0;
+
+        // Match label to signer role
+        const labelMatchIndex = signers.findIndex((s: any) => s.role === zone.label);
+        if (labelMatchIndex >= 0) {
+            signerIndex = labelMatchIndex;
+        } else if (zone.signerId) {
+            signerIndex = parseInt(zone.signerId.replace('signer-', '') || '0');
+        }
+
+        const signer = signers[signerIndex] || signers[0]; // Fallback to first signer
+
+        return {
+            id: zone.id || `zone-${index}`,
+            page: zone.pageNumber || 1,
+            x: zone.x || 0,
+            y: zone.y || 0,
+            width: zone.width || 0,
+            height: zone.height || 0,
+            label: zone.label || signer?.role || 'Signature',
+            color: signer?.color || '#3B82F6',
+        };
+    });
 
     return (
         <div className="min-h-screen bg-secondary-50 py-8">
@@ -122,7 +188,7 @@ export default function TemplateDetail() {
                     </button>
                     <div className="flex items-center justify-between">
                         <div className="flex-1">
-                            <h1 className="text-3xl font-bold text-secondary-900">{tmpl.name || tmpl.templateName}</h1>
+                            <h1 className="text-3xl font-bold text-secondary-900">{tmpl.name || tmpl.title || tmpl.templateName}</h1>
                             {tmpl.description && (
                                 <p className="text-secondary-600 mt-2">{tmpl.description}</p>
                             )}
@@ -165,13 +231,12 @@ export default function TemplateDetail() {
                         <Card className="p-6">
                             <h3 className="font-semibold text-secondary-900 mb-4">Document Preview</h3>
                             {tmpl.fileUrl ? (
-                                <div className="border border-secondary-200 rounded-lg overflow-hidden">
-                                    <iframe
-                                        src={tmpl.fileUrl}
-                                        className="w-full h-[600px]"
-                                        title="Template Preview"
-                                    />
-                                </div>
+                                <PDFViewerComplete
+                                    fileUrl={tmpl.fileUrl}
+                                    zones={transformedZones}
+                                    showZonesDefault={true}
+                                    maxHeight="700px"
+                                />
                             ) : (
                                 <div className="text-center py-12 border border-secondary-200 rounded-lg">
                                     <FileText className="h-12 w-12 text-secondary-400 mx-auto mb-2" />

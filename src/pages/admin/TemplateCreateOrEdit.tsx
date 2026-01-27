@@ -26,7 +26,7 @@ const initialTemplateData: TemplateData = {
     pageDimensions: new Map(),
 };
 
-export default function TemplateCreate() {
+export default function TemplateCreateOrEdit() {
     const navigate = useNavigate();
     const { templateId } = useParams<{ templateId: string }>();
     const isEditMode = !!templateId;

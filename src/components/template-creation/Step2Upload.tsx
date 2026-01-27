@@ -13,9 +13,10 @@ interface Step2UploadProps {
     updateTemplateData: (updates: Partial<TemplateData>) => void;
     onNext: () => void;
     onPrevious: () => void;
+    isEditMode?: boolean;
 }
 
-export function Step2Upload({ templateData, updateTemplateData, onNext, onPrevious }: Step2UploadProps) {
+export function Step2Upload({ templateData, updateTemplateData, onNext, onPrevious, isEditMode = false }: Step2UploadProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
 
@@ -41,6 +42,13 @@ export function Step2Upload({ templateData, updateTemplateData, onNext, onPrevio
     const handleNext = useCallback(async () => {
         if (!templateData.file || !templateData.name.trim()) {
             showToast.error('Please select a file and enter a template name');
+            return;
+        }
+
+        // Skip upload if in edit mode and file hasn't changed (placeholder file with size = 0)
+        if (isEditMode && templateData.file.size === 0) {
+            // File hasn't been changed, fileUrl is already set, just proceed
+            onNext();
             return;
         }
 
@@ -80,7 +88,7 @@ export function Step2Upload({ templateData, updateTemplateData, onNext, onPrevio
         } finally {
             setIsUploading(false);
         }
-    }, [templateData.file, templateData.name, updateTemplateData, onNext]);
+    }, [templateData.file, templateData.name, updateTemplateData, onNext, isEditMode]);
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -161,7 +169,10 @@ export function Step2Upload({ templateData, updateTemplateData, onNext, onPrevio
                                 <div>
                                     <p className="font-medium text-secondary-900">{templateData.file.name}</p>
                                     <p className="text-sm text-secondary-500">
-                                        {(templateData.file.size / 1024 / 1024).toFixed(2)} MB
+                                        {templateData.file.size > 0
+                                            ? `${(templateData.file.size / 1024 / 1024).toFixed(2)} MB`
+                                            : 'Existing file'
+                                        }
                                     </p>
                                 </div>
                             </div>

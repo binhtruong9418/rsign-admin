@@ -3,6 +3,7 @@ import { ArrowLeft, Check, FileText, Users, MapPin, AlertCircle, Loader2 } from 
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { PDFViewerComplete, type Zone } from '@/components/pdf';
 import { showToast } from '@/lib/toast';
 import { templatesAPI } from '@/lib/api';
 import { buildCreateTemplateRequest, buildUpdateTemplateRequest } from '@/types/template';
@@ -74,6 +75,23 @@ export function Step5Review({ templateData, onPrevious, isEditMode = false, temp
         return acc;
     }, {} as Record<string, number>);
 
+    // Transform zones to Zone format
+    const transformedZones: Zone[] = templateData.signatureZones.map((zone, index) => {
+        const signerIndex = parseInt(zone.signerId?.replace('signer-', '') || '0');
+        const signer = templateData.signers[signerIndex];
+
+        return {
+            id: zone.id || `zone-${index}`,
+            page: zone.page,
+            x: zone.x,
+            y: zone.y,
+            width: zone.width,
+            height: zone.height,
+            label: zone.label || signer?.role || 'Signature',
+            color: signer?.color || '#3B82F6',
+        };
+    });
+
     return (
         <div className="space-y-6">
             <div>
@@ -105,6 +123,19 @@ export function Step5Review({ templateData, onPrevious, isEditMode = false, temp
                     </div>
                 </div>
             </Card>
+
+            {/* PDF Preview with Zones */}
+            {templateData.fileUrl && (
+                <Card className="p-6">
+                    <h3 className="font-semibold text-secondary-900 mb-4">Document Preview</h3>
+                    <PDFViewerComplete
+                        fileUrl={templateData.fileUrl}
+                        zones={transformedZones}
+                        showZonesDefault={true}
+                        maxHeight="700px"
+                    />
+                </Card>
+            )}
 
             {/* Signer Roles */}
             <Card className="p-6">
