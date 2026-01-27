@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ArrowRight, Users, UserPlus, Search, Check, X, Plus, GripVertical, Clock } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Users, UserPlus, Search, Check, X, Plus, GripVertical, Clock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { usersAPI, signerGroupsAPI } from '@/lib/api';
 import type { DocumentData, User, Signer, SigningStep } from '@/types/document-creation';
+import { cn } from '@/lib/utils';
 
 interface Step3RecipientsProps {
     documentData: DocumentData;
@@ -325,6 +326,9 @@ function IndividualRecipients({
 
 // PARALLEL Mode Component
 function ParallelSigners({ users, documentData, updateDocumentData, onNext, onPrevious, canProceed }: any) {
+    // Get list of already selected emails to exclude from options
+    const selectedEmails = documentData.signers.map((s: Signer) => s.email).filter(Boolean);
+
     const addSigner = () => {
         const newSigner: Signer = {
             id: `signer-${Date.now()}`,
@@ -355,50 +359,51 @@ function ParallelSigners({ users, documentData, updateDocumentData, onNext, onPr
             </div>
 
             <div className="space-y-4">
-                {documentData.signers.map((signer: Signer, index: number) => (
-                    <Card key={signer.id} className="p-4">
-                        <div className="flex items-center gap-4">
-                            <div
-                                className="w-4 h-4 rounded flex-shrink-0"
-                                style={{ backgroundColor: signer.color }}
-                            />
+                {documentData.signers.map((signer: Signer, index: number) => {
+                    // Exclude other selected emails but allow current signer's email
+                    const excludeEmails = selectedEmails.filter((email: string) => email !== signer.email);
 
-                            <div className="flex-1">
-                                <label className="block text-sm font-medium text-secondary-700 mb-1">
-                                    Signer {index + 1}
-                                </label>
-                                <Select
-                                    value={signer.email}
-                                    onChange={(e) => {
-                                        const userEmail = e.target.value;
-                                        const user = users.find((u: any) => u.email === userEmail);
-                                        if (user) {
-                                            updateSigner(index, {
-                                                userId: user.id,
-                                                name: user.fullName || user.email,
-                                                email: user.email
-                                            });
-                                        }
-                                    }}
-                                    placeholder="Select user"
-                                    options={users.map((user: any) => ({
-                                        value: user.email,
-                                        label: `${user.fullName || user.email} (${user.email})`
-                                    }))}
+                    return (
+                        <Card key={signer.id} className="p-4">
+                            <div className="flex items-center gap-4">
+                                <div
+                                    className="w-4 h-4 rounded flex-shrink-0"
+                                    style={{ backgroundColor: signer.color }}
                                 />
-                            </div>
 
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => removeSigner(index)}
-                                disabled={documentData.signers.length === 1}
-                            >
-                                <X className="h-4 w-4" />
-                            </Button>
-                        </div>
-                    </Card>
-                ))}
+                                <div className="flex-1">
+                                    <label className="block text-sm font-medium text-secondary-700 mb-1">
+                                        Signer {index + 1}
+                                    </label>
+                                    <UserSearchSelect
+                                        users={users}
+                                        value={signer.email}
+                                        excludeEmails={excludeEmails}
+                                        onChange={(user) => {
+                                            if (user) {
+                                                updateSigner(index, {
+                                                    userId: user.id,
+                                                    name: user.fullName,
+                                                    email: user.email
+                                                });
+                                            }
+                                        }}
+                                        placeholder="Search user..."
+                                    />
+                                </div>
+
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => removeSigner(index)}
+                                    disabled={documentData.signers.length === 1}
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </Card>
+                    );
+                })}
 
                 <Button
                     variant="outline"
@@ -427,6 +432,9 @@ function ParallelSigners({ users, documentData, updateDocumentData, onNext, onPr
 
 // SEQUENTIAL Mode Component - Enhanced with step management
 function SequentialSigners({ users, documentData, updateDocumentData, onNext, onPrevious, canProceed }: any) {
+    // Get list of already selected emails to exclude from options
+    const selectedEmails = documentData.signers.map((s: Signer) => s.email).filter(Boolean);
+
     const addStep = () => {
         const newStep: SigningStep = {
             stepOrder: documentData.signingSteps.length + 1,
@@ -537,6 +545,9 @@ function SequentialSigners({ users, documentData, updateDocumentData, onNext, on
                                     const signer = documentData.signers.find((s: Signer) => s.id === signerId);
                                     if (!signer) return null;
 
+                                    // Exclude other selected emails but allow current signer's email
+                                    const excludeEmails = selectedEmails.filter((email: string) => email !== signer.email);
+
                                     return (
                                         <div key={signerId} className="flex items-center gap-3">
                                             <div
@@ -544,24 +555,20 @@ function SequentialSigners({ users, documentData, updateDocumentData, onNext, on
                                                 style={{ backgroundColor: signer.color }}
                                             />
                                             <div className="flex-1">
-                                                <Select
+                                                <UserSearchSelect
+                                                    users={users}
                                                     value={signer.email}
-                                                    onChange={(e) => {
-                                                        const userEmail = e.target.value;
-                                                        const user = users.find((u: any) => u.email === userEmail);
+                                                    excludeEmails={excludeEmails}
+                                                    onChange={(user) => {
                                                         if (user) {
                                                             updateSignerInStep(signerId, {
                                                                 userId: user.id,
-                                                                name: user.fullName || user.email,
+                                                                name: user.fullName,
                                                                 email: user.email
                                                             });
                                                         }
                                                     }}
-                                                    placeholder="Select user"
-                                                    options={users.map((user: any) => ({
-                                                        value: user.email,
-                                                        label: `${user.fullName || user.email} (${user.email})`
-                                                    }))}
+                                                    placeholder="Search user..."
                                                 />
                                             </div>
                                             <Button
@@ -610,6 +617,132 @@ function SequentialSigners({ users, documentData, updateDocumentData, onNext, on
                     <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
             </div>
+        </div>
+    );
+}
+
+// User Search Select Component
+interface UserSearchSelectProps {
+    users: any[];
+    value: string; // email of selected user
+    onChange: (user: { id: string; fullName: string; email: string } | null) => void;
+    placeholder?: string;
+    excludeEmails?: string[]; // emails to exclude from options
+}
+
+function UserSearchSelect({ users, value, onChange, placeholder = "Search user...", excludeEmails = [] }: UserSearchSelectProps) {
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    // Find selected user
+    const selectedUser = users.find(u => u.email === value);
+
+    // Filter users based on search query and exclude list
+    const filteredUsers = users.filter(user => {
+        if (excludeEmails.includes(user.email)) return false;
+        if (!searchQuery) return true;
+        const query = searchQuery.toLowerCase();
+        return (
+            (user.fullName?.toLowerCase().includes(query) ?? false) ||
+            user.email.toLowerCase().includes(query)
+        );
+    });
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+                setSearchQuery('');
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleSelect = (user: any) => {
+        onChange({
+            id: user.id,
+            fullName: user.fullName || user.email,
+            email: user.email
+        });
+        setIsOpen(false);
+        setSearchQuery('');
+    };
+
+    const handleClear = () => {
+        onChange(null);
+        setSearchQuery('');
+    };
+
+    return (
+        <div ref={containerRef} className="relative">
+            <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-secondary-400 pointer-events-none" />
+                <input
+                    type="text"
+                    className={cn(
+                        "w-full pl-10 pr-8 py-2 border border-secondary-300 rounded-lg text-sm",
+                        "focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500",
+                        "placeholder:text-secondary-400"
+                    )}
+                    placeholder={selectedUser ? `${selectedUser.fullName || selectedUser.email}` : placeholder}
+                    value={isOpen ? searchQuery : (selectedUser ? `${selectedUser.fullName} (${selectedUser.email})` : '')}
+                    onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        if (!isOpen) setIsOpen(true);
+                    }}
+                    onFocus={() => {
+                        setIsOpen(true);
+                        if (selectedUser) {
+                            setSearchQuery('');
+                        }
+                    }}
+                />
+                {selectedUser && !isOpen && (
+                    <button
+                        type="button"
+                        onClick={handleClear}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-secondary-400 hover:text-secondary-600"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                )}
+            </div>
+
+            {isOpen && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-secondary-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {filteredUsers.length === 0 ? (
+                        <div className="px-4 py-3 text-sm text-secondary-500 text-center">
+                            {searchQuery ? 'No users found' : 'No users available'}
+                        </div>
+                    ) : (
+                        filteredUsers.map((user) => (
+                            <button
+                                key={user.id}
+                                type="button"
+                                onClick={() => handleSelect(user)}
+                                className={cn(
+                                    "w-full px-4 py-2 text-left hover:bg-secondary-50 flex items-center justify-between",
+                                    user.email === value && "bg-primary-50"
+                                )}
+                            >
+                                <div>
+                                    <div className="text-sm font-medium text-secondary-900">
+                                        {user.fullName || user.email}
+                                    </div>
+                                    <div className="text-xs text-secondary-500">{user.email}</div>
+                                </div>
+                                {user.email === value && (
+                                    <Check className="h-4 w-4 text-primary-600" />
+                                )}
+                            </button>
+                        ))
+                    )}
+                </div>
+            )}
         </div>
     );
 }
