@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PDFViewerComplete, type Zone } from '@/components/pdf';
 import { storage } from "@/lib/utils";
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -23,11 +23,6 @@ import {
     Send,
     Eye,
     CheckCheck,
-    ZoomIn,
-    ZoomOut,
-    ChevronLeft,
-    ChevronRight,
-    Pencil,
     AlertTriangle,
 } from 'lucide-react';
 import { formatDate, getStatusLabel, cn } from '@/lib/utils';
@@ -43,7 +38,16 @@ type TabType = 'overview' | 'signatures' | 'timeline' | 'audit';
 export default function DocumentDetailNew() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState<TabType>('overview');
+
+    // Send document mutation
+    const sendDocumentMutation = useMutation({
+        mutationFn: () => documentsAPI.sendDocument(id!),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin-document-detail', id] });
+        },
+    });
 
     const { data: documentDetail, isLoading, error } = useQuery({
         queryKey: ['admin-document-detail', id],
@@ -112,9 +116,16 @@ export default function DocumentDetailNew() {
                 </div>
                 <div className="flex items-center space-x-3">
                     {document.status === 'DRAFT' && (
-                        <Button onClick={() => navigate(`/admin/documents/${id}/edit`)}>
-                            <Pencil className="h-4 w-4 mr-2" />
-                            Edit
+                        <Button
+                            onClick={() => {
+                                if (confirm('Are you sure you want to send this document for signing?')) {
+                                    sendDocumentMutation.mutate();
+                                }
+                            }}
+                            disabled={sendDocumentMutation.isPending}
+                        >
+                            <Send className="h-4 w-4 mr-2" />
+                            {sendDocumentMutation.isPending ? 'Sending...' : 'Send Document'}
                         </Button>
                     )}
                     {files.original && (

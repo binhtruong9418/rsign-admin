@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     Filter,
     Search,
@@ -27,6 +27,15 @@ import { Input, Select, Pagination, PaginationInfo, Button, Card } from '@/compo
 export default function DocumentList() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
+
+    // Send document mutation
+    const sendDocumentMutation = useMutation({
+        mutationFn: (documentId: string) => documentsAPI.sendDocument(documentId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['documents'] });
+        },
+    });
 
     // Separate applied filters from draft filters
     const [appliedFilters, setAppliedFilters] = useState<EnhancedDocumentFilters>({
@@ -528,13 +537,16 @@ export default function DocumentList() {
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                // TODO: Implement send document
+                                                                if (confirm('Are you sure you want to send this document for signing?')) {
+                                                                    sendDocumentMutation.mutate(document.id);
+                                                                }
                                                                 setOpenMenuId(null);
                                                             }}
-                                                            className="w-full text-left px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50 flex items-center"
+                                                            disabled={sendDocumentMutation.isPending}
+                                                            className="w-full text-left px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50 flex items-center disabled:opacity-50"
                                                         >
                                                             <Send className="h-4 w-4 mr-3" />
-                                                            Send Document
+                                                            {sendDocumentMutation.isPending ? 'Sending...' : 'Send Document'}
                                                         </button>
                                                     )}
                                                     <button
