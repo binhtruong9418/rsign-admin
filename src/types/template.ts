@@ -156,11 +156,11 @@ export function buildCreateTemplateRequest(
         signingMode: data.signingMode,
         signingFlow: data.signingFlow,
         description: data.description,
-        signatureZones: data.signatureZones.map((zone) => {
+        signatureZones: data.signatureZones.map((zone, index) => {
             // Find the signer for this zone to use their role as fallback label
-            const signerIndex = parseInt(zone.signerId.replace('signer-', ''));
-            const signer = data.signers[signerIndex];
-            const label = zone.label || signer?.role || `Signer ${signerIndex + 1}`;
+            const signerIndex = data.signingMode === "INDIVIDUAL" ? 0 : parseInt(zone.signerId.replace('signer-', ''));
+            const signer = data.signers[signerIndex]
+            const label = zone.label || signer?.role || `Signature ${index + 1}`;
             
             return {
                 id: zone.id?.includes('zone-') ? undefined : zone.id, // Don't send temp IDs
@@ -254,11 +254,12 @@ export function buildUpdateTemplateRequest(
     if (data.description !== undefined) request.description = data.description;
 
     if (data.signatureZones) {
-        request.signatureZones = data.signatureZones.map((zone) => {
+        request.signatureZones = data.signatureZones.map((zone, index) => {
             // Find the signer for this zone to use their role as fallback label
-            const signerIndex = parseInt(zone.signerId.replace('signer-', ''));
-            const signer = data.signers[signerIndex];
-            const label = zone.label || signer?.role || `Signer ${signerIndex + 1}`;
+            
+            const signerIndex = data.signingMode === "INDIVIDUAL" ? 0 : parseInt(zone.signerId.replace('signer-', ''));
+            const signer = data.signers[signerIndex]
+            const label = zone.label || signer?.role || `Signature ${index + 1}`;
             
             return {
                 id: zone.id?.includes('zone-') ? undefined : zone.id,
