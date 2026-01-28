@@ -101,8 +101,9 @@ export interface LoginResponse {
 export interface Document extends BaseEntity {
     title: string;
     originalFileUrl: string;
+    displayFileUrl: string; // New field for progressive signing
+    currentFileUrl?: string; // New field for tracking current state
     signedFileUrl?: string; // Available only after completion
-    contentHash?: string; // SHA-256 hash of document content
     status: DocumentStatus;
     signingMode: SigningMode;
     signingFlow: SigningFlow;
@@ -408,8 +409,9 @@ export interface AdminDocumentDetail {
     };
     files: {
         original: string;
+        display: string;
+        current: string | null;
         signed: string | null;
-        contentHash: string;
     };
     progress: {
         current: number;

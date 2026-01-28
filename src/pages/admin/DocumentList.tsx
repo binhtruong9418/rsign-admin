@@ -18,6 +18,7 @@ import {
     Send,
     Trash2,
     Download,
+    Activity,
 } from 'lucide-react';
 import { cn, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
 import { documentsAPI, usersAPI } from '@/lib/api';
@@ -574,9 +575,22 @@ export default function DocumentList() {
                                                         }}
                                                         className="w-full text-left px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50 flex items-center"
                                                     >
-                                                        <Download className="h-4 w-4 mr-3" />
-                                                        Download Document
+                                                        <FileText className="h-4 w-4 mr-3" />
+                                                        Download Original
                                                     </button>
+                                                    {document.displayFileUrl && document.status !== 'COMPLETED' && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                window.open(document.displayFileUrl || '#', '_blank');
+                                                                setOpenMenuId(null);
+                                                            }}
+                                                            className="w-full text-left px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50 flex items-center"
+                                                        >
+                                                            <Activity className="h-4 w-4 mr-3" />
+                                                            Download Current
+                                                        </button>
+                                                    )}
                                                     {document.status === 'COMPLETED' && document.signedFileUrl && (
                                                         <button
                                                             onClick={(e) => {
@@ -586,7 +600,7 @@ export default function DocumentList() {
                                                             }}
                                                             className="w-full text-left px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-50 flex items-center"
                                                         >
-                                                            <Download className="h-4 w-4 mr-3" />
+                                                            <CheckSquare className="h-4 w-4 mr-3" />
                                                             Download Signed
                                                         </button>
                                                     )}

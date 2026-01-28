@@ -164,12 +164,18 @@ export default function DocumentDetailNew() {
                     {files.original && (
                         <Button variant="outline" onClick={() => window.open(files.original, '_blank')}>
                             <FileText className="h-4 w-4 mr-2" />
-                            View Original
+                            Download Original
+                        </Button>
+                    )}
+                    {files.display && document.status !== 'COMPLETED' && (
+                        <Button variant="outline" onClick={() => window.open(files.display, '_blank')}>
+                            <Activity className="h-4 w-4 mr-2" />
+                            Download Current
                         </Button>
                     )}
                     {files.signed && (
                         <Button onClick={() => window.open(files.signed!, '_blank')}>
-                            <Download className="h-4 w-4 mr-2" />
+                            <CheckCheck className="h-4 w-4 mr-2" />
                             Download Signed
                         </Button>
                     )}
@@ -293,7 +299,7 @@ export default function DocumentDetailNew() {
 
 // Overview Tab Component
 function OverviewTab({ document, files, progress, timeline, signers, steps, zones }: any) {
-    const previewFile = files.signed || files.original;
+    const previewFile = files.display || files.signed || files.original;
 
     // Transform zones to Zone format
     const transformedZones: Zone[] = (zones || [])
