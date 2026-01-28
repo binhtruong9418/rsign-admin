@@ -167,6 +167,11 @@ export const documentsAPI = {
         return response.data;
     },
 
+    deleteDocument: async (id: string): Promise<{ success: boolean }> => {
+        const response = await api.delete(`/admin/documents/${id}`);
+        return response.data;
+    },
+
     getBatchDocuments: async (
         batchId: string,
     ): Promise<PaginationResponse<Document>> => {

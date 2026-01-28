@@ -24,9 +24,11 @@ import {
     Eye,
     CheckCheck,
     AlertTriangle,
+    Trash2,
 } from 'lucide-react';
 import { formatDate, getStatusLabel, cn } from '@/lib/utils';
 import { documentsAPI } from '@/lib/api';
+import { showToast } from '@/lib/toast';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -46,6 +48,22 @@ export default function DocumentDetailNew() {
         mutationFn: () => documentsAPI.sendDocument(id!),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin-document-detail', id] });
+            showToast.success('Document sent for signing successfully');
+        },
+        onError: (error: any) => {
+            showToast.error(error?.message || 'Failed to send document');
+        },
+    });
+
+    // Delete document mutation
+    const deleteDocumentMutation = useMutation({
+        mutationFn: () => documentsAPI.deleteDocument(id!),
+        onSuccess: () => {
+            showToast.success('Document deleted successfully');
+            navigate('/admin/documents');
+        },
+        onError: (error: any) => {
+            showToast.error(error?.message || 'Failed to delete document');
         },
     });
 
@@ -116,17 +134,32 @@ export default function DocumentDetailNew() {
                 </div>
                 <div className="flex items-center space-x-3">
                     {document.status === 'DRAFT' && (
-                        <Button
-                            onClick={() => {
-                                if (confirm('Are you sure you want to send this document for signing?')) {
-                                    sendDocumentMutation.mutate();
-                                }
-                            }}
-                            disabled={sendDocumentMutation.isPending}
-                        >
-                            <Send className="h-4 w-4 mr-2" />
-                            {sendDocumentMutation.isPending ? 'Sending...' : 'Send Document'}
-                        </Button>
+                        <>
+                            <Button
+                                onClick={() => {
+                                    if (confirm('Are you sure you want to send this document for signing?')) {
+                                        sendDocumentMutation.mutate();
+                                    }
+                                }}
+                                disabled={sendDocumentMutation.isPending}
+                            >
+                                <Send className="h-4 w-4 mr-2" />
+                                {sendDocumentMutation.isPending ? 'Sending...' : 'Send Document'}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    if (confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+                                        deleteDocumentMutation.mutate();
+                                    }
+                                }}
+                                disabled={deleteDocumentMutation.isPending}
+                                className="text-red-600 border-red-300 hover:bg-red-50"
+                            >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                {deleteDocumentMutation.isPending ? 'Deleting...' : 'Delete'}
+                            </Button>
+                        </>
                     )}
                     {files.original && (
                         <Button variant="outline" onClick={() => window.open(files.original, '_blank')}>

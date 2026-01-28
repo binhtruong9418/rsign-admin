@@ -23,6 +23,7 @@ import { cn, formatDate, getStatusColor, getStatusLabel } from '@/lib/utils';
 import { documentsAPI, usersAPI } from '@/lib/api';
 import type { EnhancedDocumentFilters } from '@/types';
 import { Input, Select, Pagination, PaginationInfo, Button, Card } from '@/components/ui';
+import { showToast } from '@/lib/toast';
 
 export default function DocumentList() {
     const [searchParams] = useSearchParams();
@@ -34,6 +35,22 @@ export default function DocumentList() {
         mutationFn: (documentId: string) => documentsAPI.sendDocument(documentId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['documents'] });
+            showToast.success('Document sent for signing successfully');
+        },
+        onError: (error: any) => {
+            showToast.error(error?.message || 'Failed to send document');
+        },
+    });
+
+    // Delete document mutation
+    const deleteDocumentMutation = useMutation({
+        mutationFn: (documentId: string) => documentsAPI.deleteDocument(documentId),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['documents'] });
+            showToast.success('Document deleted successfully');
+        },
+        onError: (error: any) => {
+            showToast.error(error?.message || 'Failed to delete document');
         },
     });
 
@@ -579,15 +596,16 @@ export default function DocumentList() {
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    if (confirm('Are you sure you want to delete this document?')) {
-                                                                        // TODO: Implement delete
+                                                                    if (confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+                                                                        deleteDocumentMutation.mutate(document.id);
                                                                     }
                                                                     setOpenMenuId(null);
                                                                 }}
-                                                                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
+                                                                disabled={deleteDocumentMutation.isPending}
+                                                                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center disabled:opacity-50"
                                                             >
                                                                 <Trash2 className="h-4 w-4 mr-3" />
-                                                                Delete Document
+                                                                {deleteDocumentMutation.isPending ? 'Deleting...' : 'Delete Document'}
                                                             </button>
                                                         </>
                                                     )}
