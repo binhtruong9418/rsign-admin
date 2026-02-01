@@ -10,7 +10,7 @@ export function cn(...inputs: ClassValue[]) {
 // Format date utilities
 export const formatDate = (
     date: string | Date,
-    format: "short" | "long" | "relative" = "short"
+    format: "short" | "long" | "relative" = "short",
 ): string => {
     const dateObj = new Date(date);
 
@@ -48,6 +48,20 @@ export const formatDate = (
         default:
             return dateObj.toLocaleDateString();
     }
+};
+
+// Format date with time (for timeline and audit trail)
+export const formatDateTime = (date: string | Date): string => {
+    const dateObj = new Date(date);
+    return dateObj.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+    });
 };
 
 // Status utilities
@@ -95,7 +109,7 @@ export const validateEmail = (email: string): boolean => {
 };
 
 export const validatePassword = (
-    password: string
+    password: string,
 ): { isValid: boolean; errors: string[] } => {
     const errors: string[] = [];
 

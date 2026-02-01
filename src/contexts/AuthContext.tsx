@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import type { User, LoginRequest } from '@/types';
 import { storage } from '@/lib/utils';
 import { authAPI } from '@/lib/api';
-import { JWT_STORAGE_KEY, USER_STORAGE_KEY } from '@/lib/constant';
+import { JWT_STORAGE_KEY, USER_STORAGE_KEY, REFRESH_TOKEN_STORAGE_KEY } from '@/lib/constant';
 
 interface AuthContextType {
     user: User | null;
@@ -40,8 +40,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         try {
             const response = await authAPI.login(credentials);
 
-            // Store token and user data
-            storage.set(JWT_STORAGE_KEY, response.token);
+            // Store tokens and user data
+            storage.set(JWT_STORAGE_KEY, response.accessToken);
+            storage.set(REFRESH_TOKEN_STORAGE_KEY, response.refreshToken);
             storage.set(USER_STORAGE_KEY, response.user);
 
             setUser(response.user);
@@ -51,6 +52,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
     }; const logout = () => {
         storage.remove(JWT_STORAGE_KEY);
+        storage.remove(REFRESH_TOKEN_STORAGE_KEY);
         storage.remove(USER_STORAGE_KEY);
         setUser(null);
     };

@@ -26,7 +26,7 @@ import {
     AlertTriangle,
     Trash2,
 } from 'lucide-react';
-import { formatDate, getStatusLabel, cn } from '@/lib/utils';
+import { formatDate, formatDateTime, getStatusLabel, cn } from '@/lib/utils';
 import { documentsAPI } from '@/lib/api';
 import { showToast } from '@/lib/toast';
 import { Button } from '@/components/ui/Button';
@@ -811,7 +811,7 @@ function TimelineTab({ timeline, document }: any) {
                         </div>
                         <div className="flex-1">
                             <p className="text-sm font-medium text-secondary-900">Document Created</p>
-                            <p className="text-sm text-secondary-600">{formatDate(timeline.created.at)}</p>
+                            <p className="text-sm text-secondary-600">{formatDateTime(timeline.created.at)}</p>
                             <p className="text-xs text-secondary-500 mt-1">
                                 Created by {timeline.created.by.fullName} ({timeline.created.by.email})
                             </p>
@@ -826,7 +826,7 @@ function TimelineTab({ timeline, document }: any) {
                             </div>
                             <div className="flex-1">
                                 <p className="text-sm font-medium text-secondary-900">Signing Deadline</p>
-                                <p className="text-sm text-secondary-600">{formatDate(timeline.deadline)}</p>
+                                <p className="text-sm text-secondary-600">{formatDateTime(timeline.deadline)}</p>
                                 {timeline.isOverdue && (
                                     <Badge variant="danger" className="mt-2">Overdue</Badge>
                                 )}
@@ -842,7 +842,7 @@ function TimelineTab({ timeline, document }: any) {
                             </div>
                             <div className="flex-1">
                                 <p className="text-sm font-medium text-secondary-900">Document Completed</p>
-                                <p className="text-sm text-secondary-600">{formatDate(timeline.completed)}</p>
+                                <p className="text-sm text-secondary-600">{formatDateTime(timeline.completed)}</p>
                                 <Badge variant="success" className="mt-2">All signatures collected</Badge>
                             </div>
                         </div>
@@ -910,7 +910,7 @@ function AuditTrailTab({ activities }: any) {
                                                 {activity.description}
                                             </p>
                                             <p className="text-xs text-secondary-500 mt-1">
-                                                {formatDate(activity.time)}
+                                                {formatDateTime(activity.time)}
                                             </p>
                                             {activity.actor && (
                                                 <p className="text-xs text-secondary-600 mt-1">

@@ -16,6 +16,7 @@ import TemplateList from '@/pages/admin/TemplateList';
 import TemplateCreateOrEdit from '@/pages/admin/TemplateCreateOrEdit';
 import TemplateDetail from '@/pages/admin/TemplateDetail';
 import TemplateUse from '@/pages/admin/TemplateUse';
+import Settings from '@/pages/admin/Settings';
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
                     <Route path="users" element={<UserManagement />} />
                     <Route path="signer-groups" element={<SignerGroups />} />
                     <Route path="signer-groups/:id" element={<SignerGroupDetail />} />
+                    <Route path="settings" element={<Settings />} />
                     <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
                   </Routes>
                 </AdminLayout>

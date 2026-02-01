@@ -93,8 +93,23 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-    token: string;
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
     user: User;
+}
+
+export interface RefreshTokenRequest {
+    refreshToken: string;
+}
+
+export interface RefreshTokenResponse {
+    accessToken: string;
+    expiresIn: number;
+}
+
+export interface SessionTimeoutConfig {
+    timeoutMinutes: number;
 }
 
 // Document Types

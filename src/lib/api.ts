@@ -1,4 +1,4 @@
-import axios, { type AxiosError, type AxiosResponse } from "axios";
+import axios, { type AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from "axios";
 import { storage } from "@/lib/utils";
 import type {
     ApiError,
@@ -24,8 +24,10 @@ import type {
     AdminDocumentDetail,
     DashboardStatistics,
     TimeSeriesData,
+    RefreshTokenResponse,
+    SessionTimeoutConfig,
 } from "@/types"; // Create axios instance with base configuration
-import { JWT_STORAGE_KEY, USER_STORAGE_KEY } from "@/lib/constant";
+import { JWT_STORAGE_KEY, USER_STORAGE_KEY, REFRESH_TOKEN_STORAGE_KEY } from "@/lib/constant";
 
 export const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL, // This will be proxied by Vite to your backend
@@ -35,11 +37,26 @@ export const api = axios.create({
     },
 });
 
+// Flag để tránh refresh loop
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
+
+// Thêm token vào queue để retry sau khi refresh
+const subscribeTokenRefresh = (cb: (token: string) => void) => {
+    refreshSubscribers.push(cb);
+};
+
+// Thực thi tất cả request đang chờ với token mới
+const onRefreshed = (token: string) => {
+    refreshSubscribers.forEach((cb) => cb(token));
+    refreshSubscribers = [];
+};
+
 // Request interceptor to add JWT token
 api.interceptors.request.use(
-    (config) => {
+    (config: InternalAxiosRequestConfig) => {
         const token = storage.get<string>(JWT_STORAGE_KEY);
-        if (token) {
+        if (token && config.headers) {
             config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
@@ -54,16 +71,79 @@ api.interceptors.response.use(
     (response: AxiosResponse) => {
         return response;
     },
-    (error: AxiosError<ApiError>) => {
-        // Handle authentication errors
-        if (error.response?.status === 401) {
-            // Clear stored auth data
-            storage.remove(JWT_STORAGE_KEY);
-            storage.remove(USER_STORAGE_KEY);
+    async (error: AxiosError<ApiError>) => {
+        const originalRequest = error.config as InternalAxiosRequestConfig & {
+            _retry?: boolean;
+        };
 
-            // Redirect to login if not already there
-            if (window.location.pathname !== "/login") {
+        // Nếu lỗi 401 và chưa retry
+        if (error.response?.status === 401 && !originalRequest._retry) {
+            // Tránh retry endpoint refresh-token
+            if (originalRequest.url?.includes("/refresh-token")) {
+                storage.remove(JWT_STORAGE_KEY);
+                storage.remove(REFRESH_TOKEN_STORAGE_KEY);
+                storage.remove(USER_STORAGE_KEY);
                 window.location.href = "/login";
+                return Promise.reject(error);
+            }
+
+            originalRequest._retry = true;
+
+            // Nếu đang refresh, queue request này
+            if (isRefreshing) {
+                return new Promise((resolve) => {
+                    subscribeTokenRefresh((token: string) => {
+                        if (originalRequest.headers) {
+                            originalRequest.headers.Authorization = `Bearer ${token}`;
+                        }
+                        resolve(api(originalRequest));
+                    });
+                });
+            }
+
+            isRefreshing = true;
+
+            try {
+                const refreshToken = storage.get<string>(REFRESH_TOKEN_STORAGE_KEY);
+
+                if (!refreshToken) {
+                    throw new Error("No refresh token available");
+                }
+
+                // Gọi API refresh token
+                const response = await axios.post<RefreshTokenResponse>(
+                    `${import.meta.env.VITE_API_URL}/users/refresh-token`,
+                    { refreshToken },
+                );
+
+                const { accessToken } = response.data;
+
+                // Lưu access token mới
+                storage.set(JWT_STORAGE_KEY, accessToken);
+
+                // Cập nhật header cho request ban đầu
+                if (originalRequest.headers) {
+                    originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+                }
+
+                // Thực thi các request đang chờ
+                onRefreshed(accessToken);
+
+                isRefreshing = false;
+
+                // Retry request ban đầu
+                return api(originalRequest);
+            } catch (refreshError) {
+                isRefreshing = false;
+                refreshSubscribers = [];
+
+                // Refresh token hết hạn hoặc không hợp lệ -> Logout
+                storage.remove(JWT_STORAGE_KEY);
+                storage.remove(REFRESH_TOKEN_STORAGE_KEY);
+                storage.remove(USER_STORAGE_KEY);
+                window.location.href = "/login";
+
+                return Promise.reject(refreshError);
             }
         }
 
@@ -113,6 +193,14 @@ export const authAPI = {
         password: string;
     }): Promise<LoginResponse> => {
         const response = await api.post("/users/login-hust", credentials);
+        return response.data;
+    },
+
+    refreshToken: async (refreshToken: string): Promise<RefreshTokenResponse> => {
+        const response = await axios.post<RefreshTokenResponse>(
+            `${import.meta.env.VITE_API_URL}/users/refresh-token`,
+            { refreshToken },
+        );
         return response.data;
     },
 };
@@ -515,6 +603,23 @@ export const statisticsAPI = {
     getTimeSeries: async (days = 30): Promise<TimeSeriesData[]> => {
         const response = await api.get("/admin/statistics/time-series", {
             params: { days },
+        });
+        return response.data;
+    },
+};
+
+// Admin Config API - Session Timeout
+export const adminConfigAPI = {
+    getSessionConfig: async (): Promise<SessionTimeoutConfig> => {
+        const response = await api.get("/admin/config/session");
+        return response.data;
+    },
+
+    updateSessionConfig: async (
+        timeoutMinutes: number,
+    ): Promise<SessionTimeoutConfig> => {
+        const response = await api.put("/admin/config/session", {
+            timeoutMinutes,
         });
         return response.data;
     },
