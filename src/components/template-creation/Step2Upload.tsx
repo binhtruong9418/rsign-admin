@@ -1,12 +1,13 @@
 import { useState, useRef, useCallback } from 'react';
-import { ArrowLeft, ArrowRight, Upload, FileText, X, Eye } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Upload, FileText, X, Eye, Clock, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Card } from '@/components/ui/Card';
 import { showToast } from '@/lib/toast';
 import { templatesAPI } from '@/lib/api';
-import type { TemplateData } from '@/types/template';
+import { cn } from '@/lib/utils';
+import type { TemplateData, SigningFlow } from '@/types/template';
 
 interface Step2UploadProps {
     templateData: TemplateData;
@@ -136,6 +137,66 @@ export function Step2Upload({ templateData, updateTemplateData, onNext, onPrevio
                     rows={3}
                 />
             </div>
+
+            {/* Signing Flow Selection - Only for SHARED mode */}
+            {templateData.signingMode === 'SHARED' && (
+                <div>
+                    <label className="block text-sm font-medium text-secondary-700 mb-3">
+                        Signing Flow *
+                    </label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button
+                            type="button"
+                            onClick={() => updateTemplateData({ signingFlow: 'PARALLEL' })}
+                            className={cn(
+                                'p-4 border-2 rounded-lg text-left transition-all hover:shadow-sm',
+                                templateData.signingFlow === 'PARALLEL'
+                                    ? 'border-primary-600 bg-primary-50'
+                                    : 'border-secondary-200 hover:border-primary-300'
+                            )}
+                        >
+                            <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                    <Zap className="h-5 w-5 text-blue-600" />
+                                </div>
+                                <div className="flex-1">
+                                    <h4 className="font-semibold text-secondary-900 mb-1">
+                                        Parallel Signing
+                                    </h4>
+                                    <p className="text-sm text-secondary-600">
+                                        All signers can sign at the same time in any order
+                                    </p>
+                                </div>
+                            </div>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => updateTemplateData({ signingFlow: 'SEQUENTIAL' })}
+                            className={cn(
+                                'p-4 border-2 rounded-lg text-left transition-all hover:shadow-sm',
+                                templateData.signingFlow === 'SEQUENTIAL'
+                                    ? 'border-primary-600 bg-primary-50'
+                                    : 'border-secondary-200 hover:border-primary-300'
+                            )}
+                        >
+                            <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                    <Clock className="h-5 w-5 text-orange-600" />
+                                </div>
+                                <div className="flex-1">
+                                    <h4 className="font-semibold text-secondary-900 mb-1">
+                                        Sequential Signing
+                                    </h4>
+                                    <p className="text-sm text-secondary-600">
+                                        Signers must sign in a specific order (approval workflow)
+                                    </p>
+                                </div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* File Upload */}
             <div>
