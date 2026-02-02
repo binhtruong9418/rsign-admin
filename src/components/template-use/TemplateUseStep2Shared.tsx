@@ -36,7 +36,7 @@ export function TemplateUseStep2Shared({
         roleDescription: signer.description,
         color: signer.color,
         zoneCount: template.signatureZones?.filter((z: any) =>
-            z.assignedRole === signer.role
+            z.signerId === `signer-${index}` || z.label === signer.role
         ).length || 0
     })) || [];
 

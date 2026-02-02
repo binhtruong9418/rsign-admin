@@ -151,19 +151,37 @@ export default function TemplateUse() {
                 }
             } else if (originalTmpl.signingFlow === 'PARALLEL' || originalTmpl.signingMode === 'INDIVIDUAL') {
                 // Parallel/Individual usually has 1 step with all signers
-                if (!restoredSteps[0]?.signers || restoredSteps[0]?.signers.length === 0) {
-                    restoredSteps = [{ stepOrder: 1, signers: restoredSigners }];
+                if (restoredSteps.length > 0 && (!restoredSteps[0]?.signers || restoredSteps[0]?.signers.length === 0)) {
+                    // Preserve original step data including zoneIndices
+                    restoredSteps = restoredSteps.map((step: any) => ({
+                        ...step,
+                        signers: restoredSigners
+                    }));
+                } else if (restoredSteps.length === 0) {
+                    // No steps exist at all, create default
+                    restoredSteps = [{
+                        stepOrder: 1,
+                        signers: restoredSigners,
+                        zoneIndices: restoredZones.map((_: any, idx: number) => idx) // All zones
+                    }];
                 }
             }
 
-            setEnhancedTemplate({
+            const enhanced = {
                 ...originalTmpl,
                 signers: restoredSigners,
                 signingSteps: restoredSteps,
                 signatureZones: restoredZones
-            });
+            };
+
+            console.log('=== Enhanced Template Created ===');
+            console.log('Signers:', restoredSigners);
+            console.log('Zones with signerId:', restoredZones);
+            console.log('================================');
+
+            setEnhancedTemplate(enhanced);
         }
-    }, [template, enhancedTemplate]); // Depend on template and enhancedTemplate
+    }, [template]); // Only depend on template, not enhancedTemplate to avoid infinite loop
 
     // Fetch users for assignment
     const { data: usersData } = useQuery({
@@ -193,8 +211,32 @@ export default function TemplateUse() {
             return;
         }
 
+        console.log('=== DEBUG: Submit Start ===');
+        console.log('displayTemplate:', displayTemplate);
+        console.log('displayTemplate.signers:', displayTemplate.signers);
+        console.log('data.roleAssignments:', data.roleAssignments);
+
         try {
             const isIndividualMode = displayTemplate.signingMode === 'INDIVIDUAL';
+
+            // Validation for SHARED mode
+            if (!isIndividualMode) {
+                // Check if all roles have been assigned
+                const requiredRoles = displayTemplate.signers?.map((s: any) => s.role) || [];
+                console.log('Required roles:', requiredRoles);
+
+                if (requiredRoles.length === 0) {
+                    showToast.error('Template signers not loaded properly. Please refresh the page.');
+                    return;
+                }
+
+                const missingRoles = requiredRoles.filter((role: string) => !data.roleAssignments[role]);
+
+                if (missingRoles.length > 0) {
+                    showToast.error(`Please assign users to all roles. Missing: ${missingRoles.join(', ')}`);
+                    return;
+                }
+            }
 
             // Build request based on mode
             const request: any = {
@@ -217,40 +259,83 @@ export default function TemplateUse() {
                 // SHARED mode - Detailed API
                 // Map assigned users to specific zone indices based on steps
                 request.signingSteps = (displayTemplate.signingSteps || []).map((step: any) => {
-                    // Collect all individual assignments for this step
-                    const stepAssignments: { userId: string; zoneIndex: number }[] = [];
+                    console.log('Processing step:', step);
 
-                    // Access zoneIndices from the step (preserved from original or reconstructed)
-                    // If enhancedTemplate replaced steps but kept original properties using ...step
+                    // Group zones by role, then map each role to its user with all zones
+                    const roleToZones = new Map<string, number[]>();
+
+                    // Access zoneIndices from the step
                     const indices = step.zoneIndices || [];
+                    console.log('Zone indices for step:', indices);
 
+                    // First pass: group zone indices by role
                     indices.forEach((zoneIdx: number) => {
                         const zone = displayTemplate.signatureZones[zoneIdx];
+                        console.log(`Zone ${zoneIdx}:`, zone);
+
                         if (!zone) return;
 
-                        // Identify the role for this zone determine who signs it
-                        // 1. Try label (primary source of truth for Role)
-                        let roleName = zone.label;
+                        // Identify the role for this zone by matching with signers array
+                        let roleName: string | undefined;
 
-                        // 2. Try identifying via signerId mapping in enhanced template
-                        if (!roleName && zone.signerId) {
+                        // Method 1: Use signerId to map to signer.role (most reliable for enhanced template)
+                        if (zone.signerId) {
                             const sIdx = parseInt(zone.signerId.replace('signer-', ''));
-                            roleName = displayTemplate.signers?.[sIdx]?.role;
+                            console.log(`Zone has signerId: ${zone.signerId}, parsed index: ${sIdx}`);
+                            if (!isNaN(sIdx) && displayTemplate.signers?.[sIdx]) {
+                                roleName = displayTemplate.signers[sIdx].role;
+                                console.log(`Mapped to role via signerId: ${roleName}`);
+                            }
                         }
 
-                        // 3. Last resort fallback
-                        if (!roleName && displayTemplate.signers?.length > 0) {
-                            roleName = displayTemplate.signers[0].role;
+                        // Method 2: Fallback - try to match zone.label with signer.role
+                        if (!roleName && zone.label && displayTemplate.signers) {
+                            const matchedSigner = displayTemplate.signers.find((s: any) => s.role === zone.label);
+                            if (matchedSigner) {
+                                roleName = matchedSigner.role;
+                                console.log(`Mapped to role via label match: ${roleName}`);
+                            }
                         }
 
-                        // Get the assigned UserID for this Role
-                        if (roleName && data.roleAssignments[roleName]) {
-                            stepAssignments.push({
-                                userId: data.roleAssignments[roleName],
-                                zoneIndex: zoneIdx
-                            });
+                        // Method 3: Last resort - use zone.label directly
+                        if (!roleName && zone.label) {
+                            roleName = zone.label;
+                            console.log(`Using zone label directly as role: ${roleName}`);
+                        }
+
+                        console.log(`Final roleName for zone ${zoneIdx}: ${roleName}`);
+
+                        if (roleName) {
+                            if (!roleToZones.has(roleName)) {
+                                roleToZones.set(roleName, []);
+                            }
+                            roleToZones.get(roleName)!.push(zoneIdx);
                         }
                     });
+
+                    console.log('roleToZones map:', Array.from(roleToZones.entries()));
+
+                    // Second pass: create one entry per role/user with all their zones
+                    const stepAssignments: { userId: string; zoneIndex: number }[] = [];
+
+                    roleToZones.forEach((zoneIndices, roleName) => {
+                        const userId = data.roleAssignments[roleName];
+                        console.log(`Role "${roleName}" -> userId: ${userId}, zones: ${zoneIndices}`);
+
+                        if (userId) {
+                            // Add one assignment per zone for this user
+                            zoneIndices.forEach(zoneIdx => {
+                                stepAssignments.push({
+                                    userId: userId,
+                                    zoneIndex: zoneIdx
+                                });
+                            });
+                        } else {
+                            console.warn(`No userId found for role: ${roleName}`);
+                        }
+                    });
+
+                    console.log('stepAssignments:', stepAssignments);
 
                     return {
                         stepOrder: step.stepOrder || step.stepNumber,
@@ -258,6 +343,13 @@ export default function TemplateUse() {
                     };
                 });
             }
+
+            // Debug logging
+            console.log('=== DEBUG: Create Document Request ===');
+            console.log('Template:', displayTemplate);
+            console.log('Role Assignments:', data.roleAssignments);
+            console.log('Request:', JSON.stringify(request, null, 2));
+            console.log('====================================');
 
             const createPromise = templatesAPI.createDocumentFromTemplate(request);
 
@@ -389,7 +481,7 @@ export default function TemplateUse() {
             <Card className="p-6">
                 {currentStep === 1 && (
                     <TemplateUseStep1
-                        template={template}
+                        template={displayTemplate}
                         title={data.title}
                         deadline={data.deadline}
                         onTitleChange={(title) => updateData({ title })}
@@ -413,7 +505,7 @@ export default function TemplateUse() {
 
                 {currentStep === 2 && !isIndividualMode && (
                     <TemplateUseStep2Shared
-                        template={template}
+                        template={displayTemplate}
                         users={users}
                         roleAssignments={data.roleAssignments}
                         onRoleAssignmentChange={(role, userId) => {
@@ -431,7 +523,7 @@ export default function TemplateUse() {
 
                 {currentStep === 3 && (
                     <TemplateUseStep3Review
-                        template={template}
+                        template={displayTemplate}
                         title={data.title}
                         deadline={data.deadline}
                         selectedUserIds={data.selectedUserIds}
