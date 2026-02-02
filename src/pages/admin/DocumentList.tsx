@@ -86,6 +86,7 @@ export default function DocumentList() {
             limit: pageSize,
             ...appliedFilters,
         }),
+        refetchOnWindowFocus: true
     });
 
     const documents = documentsResponse?.items || [];
