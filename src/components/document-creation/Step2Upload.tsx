@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { ArrowLeft, ArrowRight, Upload, FileText, X, Eye } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Upload, FileText, X, Eye, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
@@ -17,6 +17,7 @@ interface Step2UploadProps {
 export function Step2Upload({ documentData, updateDocumentData, onNext, onPrevious }: Step2UploadProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
+    const [validationError, setValidationError] = useState<string | null>(null);
 
     const handleFileSelect = useCallback(async (file: File) => {
         if (file.type !== 'application/pdf') {
@@ -28,6 +29,9 @@ export function Step2Upload({ documentData, updateDocumentData, onNext, onPrevio
             toast.error('File size must be less than 50MB');
             return;
         }
+
+        // Clear previous validation error when new file is selected
+        setValidationError(null);
 
         updateDocumentData({
             file,
@@ -44,39 +48,60 @@ export function Step2Upload({ documentData, updateDocumentData, onNext, onPrevio
         }
 
         setIsUploading(true);
+        setValidationError(null);
 
-        const uploadPromise = (async () => {
+        try {
+            // Step 1: Get presigned URL
             const uploadResponse = await documentsAPI.uploadDocument({
-                fileName: documentData.file!.name,
+                fileName: documentData.file.name,
                 purpose: 'DOCUMENT'
             });
 
-            await documentsAPI.uploadFileToPresignedUrl(
-                uploadResponse.presignedUrl,
-                documentData.file!
+            // Step 2: Upload file to presigned URL
+            await toast.promise(
+                documentsAPI.uploadFileToPresignedUrl(
+                    uploadResponse.presignedUrl,
+                    documentData.file
+                ),
+                {
+                    loading: 'Uploading document...',
+                    success: 'Document uploaded successfully!',
+                    error: (err) => err?.error || 'Failed to upload document'
+                }
             );
 
+            // Step 3: Validate PDF file
+            const validation = await toast.promise(
+                documentsAPI.validateFile(uploadResponse.fileUrl),
+                {
+                    loading: 'Validating PDF...',
+                    success: 'PDF validation complete',
+                    error: 'Failed to validate PDF'
+                }
+            );
+
+            // Check validation result
+            if (!validation.isValid) {
+                const errorMessage = validation.detectedSource
+                    ? `${validation.message}\n\nDetected source: ${validation.detectedSource}`
+                    : validation.message;
+
+                setValidationError(errorMessage);
+                toast.error('PDF validation failed');
+                return;
+            }
+
+            // Update with validated fileUrl
             updateDocumentData({
                 fileUrl: uploadResponse.fileUrl
             });
 
-            return uploadResponse;
-        })();
-
-        toast.promise(
-            uploadPromise,
-            {
-                loading: 'Uploading document...',
-                success: 'Document uploaded successfully!',
-                error: (err) => err?.error || 'Failed to upload document'
-            }
-        );
-
-        try {
-            await uploadPromise;
+            // Proceed to next step
             onNext();
         } catch (error: any) {
-            console.error('Upload error:', error);
+            console.error('Upload/validation error:', error);
+            const errorMsg = error?.response?.data?.message || error?.message || 'An error occurred';
+            setValidationError(errorMsg);
         } finally {
             setIsUploading(false);
         }
@@ -184,6 +209,26 @@ export function Step2Upload({ documentData, updateDocumentData, onNext, onPrevio
                     className="hidden"
                 />
             </div>
+
+            {/* Validation Error Display */}
+            {validationError && (
+                <Card className="p-4 bg-red-50 border-red-200">
+                    <div className="flex items-start gap-3">
+                        <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <h4 className="font-semibold text-red-900 mb-1">
+                                Invalid PDF File
+                            </h4>
+                            <p className="text-sm text-red-700 whitespace-pre-line">
+                                {validationError}
+                            </p>
+                            <p className="text-sm text-red-600 mt-2">
+                                Please upload a native PDF document instead of a scanned or converted image.
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+            )}
 
             {/* SHARED Mode Options */}
             {documentData.type === 'SHARED' && (

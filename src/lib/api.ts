@@ -1,4 +1,8 @@
-import axios, { type AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from "axios";
+import axios, {
+    type AxiosError,
+    type AxiosResponse,
+    type InternalAxiosRequestConfig,
+} from "axios";
 import { storage } from "@/lib/utils";
 import type {
     ApiError,
@@ -27,7 +31,11 @@ import type {
     RefreshTokenResponse,
     SessionTimeoutConfig,
 } from "@/types"; // Create axios instance with base configuration
-import { JWT_STORAGE_KEY, USER_STORAGE_KEY, REFRESH_TOKEN_STORAGE_KEY } from "@/lib/constant";
+import {
+    JWT_STORAGE_KEY,
+    USER_STORAGE_KEY,
+    REFRESH_TOKEN_STORAGE_KEY,
+} from "@/lib/constant";
 
 export const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL, // This will be proxied by Vite to your backend
@@ -104,7 +112,9 @@ api.interceptors.response.use(
             isRefreshing = true;
 
             try {
-                const refreshToken = storage.get<string>(REFRESH_TOKEN_STORAGE_KEY);
+                const refreshToken = storage.get<string>(
+                    REFRESH_TOKEN_STORAGE_KEY,
+                );
 
                 if (!refreshToken) {
                     throw new Error("No refresh token available");
@@ -196,7 +206,9 @@ export const authAPI = {
         return response.data;
     },
 
-    refreshToken: async (refreshToken: string): Promise<RefreshTokenResponse> => {
+    refreshToken: async (
+        refreshToken: string,
+    ): Promise<RefreshTokenResponse> => {
         const response = await axios.post<RefreshTokenResponse>(
             `${import.meta.env.VITE_API_URL}/users/refresh-token`,
             { refreshToken },
@@ -286,6 +298,20 @@ export const documentsAPI = {
                 "Content-Type": file.type,
             },
         });
+    },
+
+    // Validate uploaded PDF file
+    validateFile: async (
+        fileUrl: string,
+    ): Promise<{
+        isValid: boolean;
+        message: string;
+        detectedSource?: string;
+    }> => {
+        const response = await api.post("/admin/documents/validate-file", {
+            fileUrl,
+        });
+        return response.data;
     },
 };
 
@@ -590,6 +616,20 @@ export const templatesAPI = {
         batchId?: string;
     }> => {
         const response = await api.post("/admin/documents/from-template", data);
+        return response.data;
+    },
+
+    // Validate uploaded PDF file
+    validateFile: async (
+        fileUrl: string,
+    ): Promise<{
+        isValid: boolean;
+        message: string;
+        detectedSource?: string;
+    }> => {
+        const response = await api.post("/admin/templates/validate-file", {
+            fileUrl,
+        });
         return response.data;
     },
 };
